@@ -547,16 +547,27 @@ const columns: ColumnDef<Order>[] = [
     },
   },
   {
-    accessorKey: "customer",
-    header: "Customer",
-    cell: ({ row }: { row: Row<Order> }) => (
-      <div className="flex flex-col">
-        <span>{row.getValue("customer")}</span>
-        <span className="text-xs text-muted-foreground">
-          {row.original.email}
-        </span>
-      </div>
-    ),
+    accessorKey: "items",
+    header: "Poster Info",
+    cell: ({ row }: { row: Row<Order> }) => {
+      const items = row.original.items || [];
+      return (
+        <div className="flex flex-col">
+          {items.length > 0 ? (
+            items.map((item, index) => (
+              <div key={index} className="flex flex-col">
+                <span className="font-medium">{item.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  Qty: {item.quantity} × ${item.price.toFixed(2)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <span className="text-muted-foreground">No items</span>
+          )}
+        </div>
+      );
+    },
   },
   {
     id: "actions",
@@ -603,7 +614,7 @@ export function OrdersTable({
   onDateRangeChange,
   onTimeRangeChange,
   currentDateRange,
-  currentTimeRange = "all",
+  currentTimeRange = "this_month",
   isStandalone = false,
 }: OrdersTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([
@@ -752,34 +763,17 @@ export function OrdersTable({
             value={selectedTimeRange}
             onValueChange={handleTimeRangeChange}
           >
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Time Period" />
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="Time Range" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Time</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="180d">Last 6 months</SelectItem>
-              <SelectItem value="this_month">This month</SelectItem>
-              <SelectItem value="custom">Custom range</SelectItem>
+              <SelectItem value="7d">Last 7 Days</SelectItem>
+              <SelectItem value="30d">Last 30 Days</SelectItem>
+              <SelectItem value="90d">Last 90 Days</SelectItem>
+              <SelectItem value="180d">Last 6 Months</SelectItem>
+              <SelectItem value="this_month">This Month</SelectItem>
             </SelectContent>
           </Select>
-
-          {/* Only show DateRangeFilter when not in standalone mode or when custom range is selected */}
-          {(!isStandalone || selectedTimeRange === "custom") && (
-            <React.Suspense fallback={<div>Loading filter...</div>}>
-              <DateRangeFilter
-                onRangeChange={handleDateRangeChange}
-                defaultValues={dateRange}
-                currentOption={
-                  selectedTimeRange === "custom"
-                    ? "custom"
-                    : (selectedTimeRange as any)
-                }
-              />
-            </React.Suspense>
-          )}
         </div>
       </div>
 

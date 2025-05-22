@@ -22,6 +22,7 @@ export default function OrdersPage() {
     handleDateRangeChange,
     handleTimeRangeChange,
     refetch,
+    setInitialTimeRange,
   } = useOrdersData();
 
   const [approvedProductsCount, setApprovedProductsCount] = useState<number>(0);
@@ -30,55 +31,27 @@ export default function OrdersPage() {
   >(null);
   const [loadingApprovedProducts, setLoadingApprovedProducts] =
     useState<boolean>(true);
-  const [isChangingDateRange, setIsChangingDateRange] =
-    useState<boolean>(false);
+  const [initialLoadDone, setInitialLoadDone] = useState<boolean>(false);
 
-  // Add effect to log stats for debugging
+  // Set initial time range to "this_month" on component mount
   useEffect(() => {
-    if (stats && !isLoading) {
-      console.log("OrdersPage stats:", {
-        totalOrders: stats.totalOrders,
-        totalSales: stats.totalSales,
-        totalRevenue: stats.totalRevenue.toFixed(2),
-        netRevenue: stats.netRevenue.toFixed(2),
-      });
-
-      // Count total items from orders for verification
-      let totalItems = 0;
-      orders.forEach((order) => {
-        if (order.items && Array.isArray(order.items)) {
-          order.items.forEach((item) => {
-            totalItems += item.quantity;
-          });
-        }
-      });
-
-      console.log(
-        `Counted ${totalItems} total items in ${orders.length} orders`
-      );
-
-      // Check if the stats match with calculated values
-      if (totalItems !== stats.totalSales) {
-        console.warn(
-          "Discrepancy in sales count: stats.totalSales =",
-          stats.totalSales,
-          "but counted totalItems =",
-          totalItems
-        );
-      }
+    if (!initialLoadDone) {
+      console.log("Setting initial time range to this_month");
+      setInitialTimeRange("this_month");
+      setInitialLoadDone(true);
     }
-  }, [stats, isLoading, orders]);
+  }, [setInitialTimeRange, initialLoadDone]);
 
-  // Reset isChangingDateRange when loading completes
+  // Log time range changes for debugging
   useEffect(() => {
-    if (!isLoading && isChangingDateRange) {
-      setIsChangingDateRange(false);
-    }
-  }, [isLoading, isChangingDateRange]);
+    console.log("Current time range:", timeRange);
+    console.log("Current date range:", {
+      from: dateRange.from?.toISOString(),
+      to: dateRange.to?.toISOString(),
+    });
+  }, [timeRange, dateRange]);
 
   // Check if the user has any approved products in Supabase
-  // This is important because we need to show the user they need approved products
-  // to see orders in the B2B dashboard
   useEffect(() => {
     const checkApprovedProducts = async () => {
       try {
@@ -131,22 +104,8 @@ export default function OrdersPage() {
 
   // Handle time range change with correct type casting
   const handleTimeRangeChangeWithCasting = (value: string) => {
-    setIsChangingDateRange(true);
     handleTimeRangeChange(value as DashboardFilter);
   };
-
-  // Wrap the date range change handler to track loading state
-  const handleDateRangeChangeWrapper = (range: {
-    from: Date | undefined;
-    to: Date | undefined;
-  }) => {
-    setIsChangingDateRange(true);
-    handleDateRangeChange(range);
-  };
-
-  // Combined loading state for better UI experience
-  const isPageLoading =
-    isLoading || loadingApprovedProducts || isChangingDateRange;
 
   return (
     <SidebarProvider>
@@ -178,22 +137,11 @@ export default function OrdersPage() {
                   </Alert>
                 )}
 
-              {isChangingDateRange && (
-                <Alert>
-                  <Icons.spinner className="h-4 w-4 animate-spin" />
-                  <AlertTitle>Updating data</AlertTitle>
-                  <AlertDescription>
-                    Loading orders for the selected time period...
-                  </AlertDescription>
-                </Alert>
-              )}
-
               <OrdersTable
                 orders={orders}
-                isLoading={isPageLoading}
-                isRefreshing={isChangingDateRange}
+                isLoading={isLoading || loadingApprovedProducts}
                 orderStats={stats}
-                onDateRangeChange={handleDateRangeChangeWrapper}
+                onDateRangeChange={handleDateRangeChange}
                 onTimeRangeChange={handleTimeRangeChangeWithCasting}
                 currentDateRange={dateRange}
                 currentTimeRange={timeRange}
