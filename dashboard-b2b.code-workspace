@@ -1,0 +1,14 @@
+{
+  "folders": [
+	{
+		"path": "."
+	},
+	{
+		"path": "../b2b-deinspar/nextjs/b2b/types"
+	},
+	{
+		"path": "../b2b-deinspar/nextjs/b2b/utils"
+	}
+],
+  "settings": {}
+}

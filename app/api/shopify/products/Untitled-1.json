@@ -1,0 +1,24 @@
+ {
+    "id": "gid://shopify/Order/11453283303811",
+    "orderNumber": "#1128",
+    "createdAt": "2025-01-06T20:02:54Z",
+    "totalAmount": "18.22",
+    "lineItems": [
+      {
+        "id": "gid://shopify/LineItem/34343849689475",
+        "productId": "14994911691139",
+        "title": "The Heart Poster",
+        "price": "18.22",
+        "quantity": 1,
+        "variantId": "gid://shopify/ProductVariant/54915121906051",
+        "variantTitle": "50x70 cm / Weiter ohne Rahmen"
+      }
+    ],
+    "customerName": "Erika Kangni",
+    "customerEmail": "erikakangni@outlook.de",
+    "financialStatus": "PARTIALLY_REFUNDED",
+    "fulfillmentStatus": "unfulfilled",
+    "refundAmount": 9.11,
+    "shippingAmount": 4.11,
+    "netRevenue": 9.11
+  }
