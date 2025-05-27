@@ -10,6 +10,8 @@ export interface EarningsData {
   earnings: number;
   sales: number;
   commission: number;
+  refunds?: number;
+  netEarnings?: number;
   chartData: {
     earnings: { month: string; earnings: number }[];
     sales: { month: string; sales: number }[];
@@ -90,6 +92,13 @@ const fetchEarningsData = async (
           ? dashboardData.stats.totalSales
           : 0,
       commission: 30, // Fixed commission rate
+      refunds: dashboardData.stats.totalRefunds || 0,
+      netEarnings:
+        dashboardData.stats.netRevenue !== undefined
+          ? dashboardData.stats.netRevenue * 0.3
+          : dashboardData.stats.totalRefunds
+          ? dashboardData.stats.totalCommission // totalCommission should already be based on netRevenue
+          : undefined,
       chartData: {
         earnings: [],
         sales: [],
@@ -162,8 +171,14 @@ const fetchEarningsData = async (
 
           const data = monthlyData.get(monthKey);
           data.sales += typeof point.sales === "number" ? point.sales : 0;
-          data.earnings +=
-            typeof point.revenue === "number" ? point.revenue * 0.3 : 0; // 30% commission
+
+          // Use netRevenue when available to account for refunds
+          if (typeof point.netRevenue === "number") {
+            data.earnings += point.netRevenue * 0.3; // 30% commission from net revenue
+          } else if (typeof point.revenue === "number") {
+            data.earnings += point.revenue * 0.3; // 30% commission
+          }
+
           monthlyData.set(monthKey, data);
         } catch (e) {
           console.error("Error processing sales point:", e, point);
@@ -230,7 +245,7 @@ const fetchEarningsData = async (
           title: product.title || "Untitled Poster",
           image: product.imageUrl || "/placeholder.svg",
           sales: product.salesCount || 0,
-          revenue: parseFloat((product.commission || 0).toFixed(2)),
+          revenue: parseFloat(((product.revenue || 0) * 0.3).toFixed(2)),
         }));
 
       console.log(
@@ -349,6 +364,8 @@ const fetchEarningsData = async (
       earnings: 0,
       sales: 0,
       commission: 30,
+      refunds: 0,
+      netEarnings: undefined,
       chartData: {
         earnings: [],
         sales: [],

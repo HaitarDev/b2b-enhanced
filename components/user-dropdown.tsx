@@ -36,6 +36,8 @@ import {
 import { ThemeToggle } from "./theme-toggle";
 import { UserData } from "./nav-user";
 import { Skeleton } from "./ui/skeleton";
+import { useCurrency } from "@/hooks/use-currency";
+import { SupportedCurrency } from "@/lib/currency";
 
 interface UserDropdownProps {
   user: UserData;
@@ -43,7 +45,11 @@ interface UserDropdownProps {
 }
 
 export function UserDropdown({ user, isLoading = false }: UserDropdownProps) {
-  const [currency, setCurrency] = React.useState("EUR");
+  const {
+    userCurrency,
+    setUserCurrency,
+    isLoading: isCurrencyLoading,
+  } = useCurrency();
   const supabase = createClient();
   const router = useRouter();
 
@@ -58,7 +64,16 @@ export function UserDropdown({ user, isLoading = false }: UserDropdownProps) {
     }
   };
 
-  if (isLoading) {
+  const handleCurrencyChange = async (value: string) => {
+    const success = await setUserCurrency(value as SupportedCurrency);
+    if (success) {
+      toast.success(`Currency updated to ${value}`);
+    } else {
+      toast.error("Failed to update currency");
+    }
+  };
+
+  if (isLoading || isCurrencyLoading) {
     return (
       <div className="flex items-center space-x-2">
         <Skeleton className="h-8 w-8 rounded-full" />
@@ -131,7 +146,7 @@ export function UserDropdown({ user, isLoading = false }: UserDropdownProps) {
                 <GlobeIcon className="mr-2 h-4 w-4" />
                 <span className="text-sm">Currency</span>
               </div>
-              <Select value={currency} onValueChange={setCurrency}>
+              <Select value={userCurrency} onValueChange={handleCurrencyChange}>
                 <SelectTrigger className="h-7 w-20 rounded-full border-muted bg-muted/30 px-2.5 py-0 text-xs">
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>

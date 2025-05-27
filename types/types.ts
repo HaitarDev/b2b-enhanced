@@ -144,6 +144,7 @@ export type Database = {
           bio: string | null;
           country: string | null;
           created_at: string;
+          currency: string | null;
           email: string;
           iban: string | null;
           id: string;
@@ -163,6 +164,7 @@ export type Database = {
           bio?: string | null;
           country?: string | null;
           created_at?: string;
+          currency?: string | null;
           email: string;
           iban?: string | null;
           id: string;
@@ -182,6 +184,7 @@ export type Database = {
           bio?: string | null;
           country?: string | null;
           created_at?: string;
+          currency?: string | null;
           email?: string;
           iban?: string | null;
           id?: string;

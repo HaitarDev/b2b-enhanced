@@ -49,7 +49,14 @@ export default function OrdersPage() {
       from: dateRange.from?.toISOString(),
       to: dateRange.to?.toISOString(),
     });
-  }, [timeRange, dateRange]);
+    if (stats) {
+      console.log("Order stats:", {
+        totalRevenue: stats.totalRevenue,
+        totalRefunds: stats.totalRefunds,
+        netRevenue: stats.netRevenue,
+      });
+    }
+  }, [timeRange, dateRange, stats]);
 
   // Check if the user has any approved products in Supabase
   useEffect(() => {

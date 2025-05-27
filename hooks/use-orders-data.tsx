@@ -18,6 +18,8 @@ import { createClient } from "@/utils/supabase/client";
 import {
   countTotalSales,
   calculateTotalRevenue,
+  calculateTotalRefunds,
+  calculateNetRevenue,
   deduplicateOrders,
 } from "@/utils/sales-helpers";
 import React from "react";
@@ -252,7 +254,13 @@ export function useOrdersData() {
       }
 
       // Get refund and shipping amounts if available
-      if (order.refundAmount !== undefined) {
+      if (status === "Refunded") {
+        // For refunded orders, use the full order amount as the refund amount
+        refundAmount = parseFloat(order.totalAmount);
+        console.log(
+          `Order ${order.orderNumber} is REFUNDED - setting full refund amount: ${refundAmount}`
+        );
+      } else if (order.refundAmount !== undefined) {
         refundAmount = order.refundAmount || 0;
         console.log(
           `Order ${order.orderNumber} has refundAmount: ${refundAmount}`
@@ -278,15 +286,23 @@ export function useOrdersData() {
         price: parseFloat(item.price),
       }));
 
-      // Calculate order total and net revenue
+      // Calculate order total
       const total = parseFloat(order.totalAmount);
-      const netRevenue =
-        order.netRevenue !== undefined
-          ? order.netRevenue || 0
-          : total - refundAmount;
+
+      // Calculate net revenue
+      // For refunded orders, net revenue is zero
+      // For others, subtract any partial refunds
+      let netRevenue = total;
+      if (status === "Refunded") {
+        netRevenue = 0;
+      } else if (status !== "Cancelled") {
+        netRevenue = total - refundAmount;
+      } else {
+        netRevenue = 0;
+      }
 
       console.log(
-        `Order ${order.orderNumber} - Total: ${total}, Refund: ${refundAmount}, Net: ${netRevenue}`
+        `Order ${order.orderNumber} - Total: ${total}, Refund: ${refundAmount}, Net: ${netRevenue}, Status: ${status}`
       );
 
       return {
@@ -355,6 +371,29 @@ export function useOrdersData() {
       return filtered;
     }
 
+    // Special handling for this_month data to ensure we get all orders in the current month
+    if (timeRange === "this_month") {
+      const now = new Date();
+      const fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      fromDate.setHours(0, 0, 0, 0);
+
+      const toDate = new Date();
+      toDate.setHours(23, 59, 59, 999);
+
+      console.log(`Using this month range: 
+        from: ${fromDate.toISOString()} 
+        to: ${toDate.toISOString()}`);
+
+      const filtered = orders.filter((order) => {
+        const orderDate = new Date(order.date);
+        const isInRange = orderDate >= fromDate && orderDate <= toDate;
+        return isInRange;
+      });
+
+      console.log(`Filtered orders for this month: ${filtered.length}`);
+      return filtered;
+    }
+
     // For custom range, use the date range
     const filtered = orders.filter((order) => {
       // Ensure we have valid dates to compare against
@@ -406,23 +445,16 @@ export function useOrdersData() {
 
     console.log(`Total sales (quantities): ${totalSalesQuantity}`);
 
-    // Use the utility function to calculate revenue
+    // Use the utility functions to calculate revenue and refunds
     const totalRevenue = calculateTotalRevenue(orders);
-
-    // Calculate total refunds from all orders
-    const totalRefunds = orders.reduce(
-      (sum, order) => sum + order.refundAmount,
-      0
-    );
+    const totalRefunds = calculateTotalRefunds(orders);
+    const netRevenue = calculateNetRevenue(orders);
 
     // Calculate total shipping from all orders
     const totalShipping = orders.reduce(
       (sum, order) => sum + order.shippingAmount,
       0
     );
-
-    // Calculate net revenue using each order's netRevenue property
-    const netRevenue = orders.reduce((sum, order) => sum + order.netRevenue, 0);
 
     // Average order value from paid orders only
     const averageOrderValue =
@@ -778,7 +810,9 @@ export function useOrdersData() {
       } else if (newTimeRange === "this_month") {
         // Ensure "this_month" always starts from the 1st day of the current month
         from = new Date(now.getFullYear(), now.getMonth(), 1);
+        from.setHours(0, 0, 0, 0); // Start of day on the 1st
         to = now; // Up to today
+        to.setHours(23, 59, 59, 999); // End of current day
       } else {
         // For "all" time range
         from = undefined;
@@ -833,7 +867,11 @@ export function useOrdersData() {
     } else if (initialTimeRange === "180d") {
       from = subMonths(now, 6);
     } else if (initialTimeRange === "this_month") {
+      // Ensure "this_month" always starts from the 1st day of the current month
       from = new Date(now.getFullYear(), now.getMonth(), 1);
+      from.setHours(0, 0, 0, 0); // Start of day on the 1st
+      to = new Date(now); // Up to today
+      to.setHours(23, 59, 59, 999); // End of current day
     } else {
       // For "all" time range
       from = undefined;
@@ -857,7 +895,9 @@ export function useOrdersData() {
     }
 
     // Refetch data with the new range
-    refetchOrders();
+    setTimeout(() => {
+      refetchOrders();
+    }, 100); // Small delay to ensure state updates before fetching
   };
 
   return {

@@ -47,7 +47,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { bio, instagram, portfolio } = body;
+    const { bio, instagram, portfolio, currency } = body;
 
     const supabase = await createClient();
 
@@ -69,6 +69,7 @@ export async function PATCH(request: Request) {
     if (bio !== undefined) updateData.bio = bio;
     if (instagram !== undefined) updateData.instagram = instagram;
     if (portfolio !== undefined) updateData.portfolio = portfolio;
+    if (currency !== undefined) updateData.currency = currency;
 
     // Add updated timestamp
     updateData.updated_at = new Date().toISOString();

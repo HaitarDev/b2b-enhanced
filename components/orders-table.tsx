@@ -57,7 +57,15 @@ import {
 } from "@/components/ui/table";
 
 // Import the utility function for consistent counting
-import { countTotalSales } from "@/utils/sales-helpers";
+import {
+  countTotalSales,
+  calculateTotalRevenue,
+  calculateTotalRefunds,
+  calculateNetRevenue,
+} from "@/utils/sales-helpers";
+
+// Import the formatCurrency function from lib/utils
+import { formatCurrency } from "@/lib/utils";
 
 // Define the schema for order data
 export const orderSchema = z.object({
@@ -486,15 +494,29 @@ const columns: ColumnDef<Order>[] = [
   },
   {
     accessorKey: "total",
-    header: "Total",
+    header: "Amount",
     cell: ({ row }: { row: Row<Order> }) => {
-      const amount = parseFloat(row.getValue("total") as string);
-      const formatted = new Intl.NumberFormat("en-GB", {
-        style: "currency",
-        currency: "GBP",
-      }).format(amount);
-
-      return <div className="text-right font-medium">{formatted}</div>;
+      const order = row.original;
+      return (
+        <div className="flex flex-col justify-end text-right">
+          <div className="font-medium">{formatCurrency(order.total)}</div>
+          {order.status === "Refunded" && (
+            <div className="text-xs text-destructive">
+              -{formatCurrency(order.total)} (Refunded)
+            </div>
+          )}
+          {order.status !== "Refunded" && order.refundAmount > 0 && (
+            <div className="text-xs text-destructive">
+              -{formatCurrency(order.refundAmount)} (Partial Refund)
+            </div>
+          )}
+          {order.shippingAmount > 0 && (
+            <div className="text-xs text-muted-foreground">
+              Inc. {formatCurrency(order.shippingAmount)} shipping
+            </div>
+          )}
+        </div>
+      );
     },
   },
   {
@@ -502,14 +524,10 @@ const columns: ColumnDef<Order>[] = [
     header: "Refund",
     cell: ({ row }: { row: Row<Order> }) => {
       const amount = parseFloat(row.getValue("refundAmount") as string) || 0;
-      const formatted = new Intl.NumberFormat("en-GB", {
-        style: "currency",
-        currency: "GBP",
-      }).format(amount);
 
       return amount > 0 ? (
         <div className="text-right font-medium text-destructive">
-          {formatted}
+          {formatCurrency(amount)}
         </div>
       ) : (
         <div className="text-right text-muted-foreground">None</div>
@@ -521,13 +539,9 @@ const columns: ColumnDef<Order>[] = [
     header: "Shipping",
     cell: ({ row }: { row: Row<Order> }) => {
       const amount = parseFloat(row.getValue("shippingAmount") as string) || 0;
-      const formatted = new Intl.NumberFormat("en-GB", {
-        style: "currency",
-        currency: "GBP",
-      }).format(amount);
 
       return amount > 0 ? (
-        <div className="text-right font-medium">{formatted}</div>
+        <div className="text-right font-medium">{formatCurrency(amount)}</div>
       ) : (
         <div className="text-right text-muted-foreground">Free</div>
       );
@@ -538,12 +552,10 @@ const columns: ColumnDef<Order>[] = [
     header: "Net Revenue",
     cell: ({ row }: { row: Row<Order> }) => {
       const amount = parseFloat(row.getValue("netRevenue") as string) || 0;
-      const formatted = new Intl.NumberFormat("en-GB", {
-        style: "currency",
-        currency: "GBP",
-      }).format(amount);
 
-      return <div className="text-right font-medium">{formatted}</div>;
+      return (
+        <div className="text-right font-medium">{formatCurrency(amount)}</div>
+      );
     },
   },
   {
@@ -558,7 +570,7 @@ const columns: ColumnDef<Order>[] = [
               <div key={index} className="flex flex-col">
                 <span className="font-medium">{item.name}</span>
                 <span className="text-xs text-muted-foreground">
-                  Qty: {item.quantity} × ${item.price.toFixed(2)}
+                  Qty: {item.quantity} × {formatCurrency(item.price)}
                 </span>
               </div>
             ))
@@ -767,11 +779,11 @@ export function OrdersTable({
               <SelectValue placeholder="Time Range" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="this_month">This Month</SelectItem>
               <SelectItem value="7d">Last 7 Days</SelectItem>
               <SelectItem value="30d">Last 30 Days</SelectItem>
               <SelectItem value="90d">Last 90 Days</SelectItem>
               <SelectItem value="180d">Last 6 Months</SelectItem>
-              <SelectItem value="this_month">This Month</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -793,10 +805,7 @@ export function OrdersTable({
           <div className="rounded-lg border p-3">
             <div className="text-sm text-muted-foreground">Total Revenue</div>
             <div className="text-2xl font-bold">
-              {new Intl.NumberFormat("en-GB", {
-                style: "currency",
-                currency: "GBP",
-              }).format(orderStats.totalRevenue)}
+              {formatCurrency(orderStats.totalRevenue)}
             </div>
           </div>
           <div className="rounded-lg border p-3">
@@ -804,16 +813,20 @@ export function OrdersTable({
               {orderStats.totalRefunds > 0 ? "Net Revenue" : "Average Order"}
             </div>
             <div className="text-2xl font-bold">
-              {orderStats.totalRefunds > 0
-                ? new Intl.NumberFormat("en-GB", {
-                    style: "currency",
-                    currency: "GBP",
-                  }).format(orderStats.netRevenue || orderStats.totalRevenue)
-                : new Intl.NumberFormat("en-GB", {
-                    style: "currency",
-                    currency: "GBP",
-                  }).format(orderStats.averageOrderValue)}
+              {!isLoading
+                ? formatCurrency(
+                    orderStats.netRevenue || orderStats.totalRevenue
+                  )
+                : formatCurrency(orderStats.averageOrderValue)}
             </div>
+            {orderStats.totalRefunds > 0 && (
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="text-destructive font-medium">
+                  After refunds
+                </span>
+                <span className="text-muted-foreground">(Total - Refunds)</span>
+              </div>
+            )}
           </div>
           <div className="rounded-lg border p-3">
             <div className="text-sm text-muted-foreground">Paid Orders</div>
@@ -827,12 +840,7 @@ export function OrdersTable({
               <span>{orderStats.refundedOrdersCount}</span>
               {orderStats.totalRefunds > 0 && (
                 <span className="text-sm text-destructive">
-                  (
-                  {new Intl.NumberFormat("en-GB", {
-                    style: "currency",
-                    currency: "GBP",
-                  }).format(orderStats.totalRefunds)}
-                  )
+                  ({formatCurrency(orderStats.totalRefunds)})
                 </span>
               )}
             </div>

@@ -58,8 +58,22 @@ export async function GET() {
     console.log({ newTicketsCount, ticketsError });
     if (ticketsError) throw ticketsError;
 
-    // For now, we're setting total payouts to 0
-    const totalPayouts = 0;
+    // Calculate total payouts by summing the amount field from the payouts table
+    const { data: payoutsData, error: payoutsError } = await supabase
+      .from("payout")
+      .select("amount");
+
+    if (payoutsError) {
+      console.error("Error fetching payouts:", payoutsError);
+      throw payoutsError;
+    }
+
+    // Sum up all payout amounts
+    const totalPayouts = payoutsData.reduce((total, payout) => {
+      return total + (parseFloat(payout.amount) || 0);
+    }, 0);
+
+    console.log({ totalPayouts, payoutsCount: payoutsData.length });
 
     return NextResponse.json({
       approvedCreatorsCount,

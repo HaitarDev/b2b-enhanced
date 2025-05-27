@@ -6,12 +6,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/utils/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { formatCurrency } from "@/lib/utils";
 
 const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const supabase = createClient();
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
+
+  // Set isClient to true once component mounts to avoid SSR issues
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Check if user is authenticated and is an admin
   const { data: currentUser } = useQuery({
@@ -26,12 +33,14 @@ const AdminDashboard = () => {
       }
       return user;
     },
+    // Only run this query on the client side
+    enabled: isClient,
   });
 
   // Check admin role
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["profile", currentUser?.id],
-    enabled: !!currentUser?.id,
+    enabled: !!currentUser?.id && isClient,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
@@ -70,7 +79,7 @@ const AdminDashboard = () => {
       }
       return response.json();
     },
-    enabled: !!profile && profile.role === "admin",
+    enabled: !!profile && profile.role === "admin" && isClient,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
@@ -156,7 +165,11 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              £{renderCount(data?.totalPayouts ?? null)}
+              {isLoading || profileLoading || queryLoading ? (
+                <Skeleton className="h-8 w-16" />
+              ) : (
+                formatCurrency(data?.totalPayouts ?? 0)
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Total paid to creators

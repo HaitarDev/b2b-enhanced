@@ -32,6 +32,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useState, useEffect } from "react";
 import { DateRange as DateRangeType } from "react-day-picker";
 import { cn } from "@/lib/utils";
+import { CurrencyDisplay } from "./currency-display";
 
 export function SectionCards() {
   const {
@@ -224,30 +225,27 @@ export function SectionCards() {
             {isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-2xl font-semibold">
-                £{data?.stats.totalRevenue.toFixed(2) || "0.00"}
-              </div>
+              <CurrencyDisplay
+                amount={
+                  data?.stats?.netRevenue !== undefined
+                    ? data.stats.netRevenue
+                    : 0
+                }
+                sourceCurrency="GBP"
+                showApprox={true}
+              />
             )}
-            <div className="text-xs text-muted-foreground">
-              <span className="font-medium">Approx.</span> £
-              {isLoading
-                ? "..."
-                : ((data?.stats.totalRevenue || 0) * 1.19).toFixed(2)}{" "}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <InfoIcon className="h-3 w-3 inline-block ml-1 align-text-bottom relative -top-[1px] text-muted-foreground" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p>
-                      This is an approximate value based on current exchange
-                      rates. Actual earnings may vary slightly.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <br />
-              Before commission
+            <div className="text-xs text-muted-foreground mt-1">
+              {data?.stats?.totalRefunds && data.stats.totalRefunds > 0 ? (
+                <span>
+                  <span className="text-destructive">After refunds</span>{" "}
+                  <span className="text-xs">
+                    (-£{data.stats.totalRefunds.toFixed(2)})
+                  </span>
+                </span>
+              ) : (
+                "Before commission"
+              )}
             </div>
           </CardContent>
         </Card>
@@ -259,30 +257,25 @@ export function SectionCards() {
             {isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-2xl font-semibold">
-                £{data?.stats.totalCommission.toFixed(2) || "0.00"}
-              </div>
+              <CurrencyDisplay
+                amount={
+                  data?.stats?.totalRefunds && data.stats.totalRefunds > 0
+                    ? (data.stats?.netRevenue || 0) * 0.3
+                    : data?.stats?.totalCommission || 0
+                }
+                sourceCurrency="GBP"
+                showApprox={true}
+              />
             )}
-            <div className="text-xs text-muted-foreground">
-              <span className="font-medium">Approx.</span> £
-              {isLoading
-                ? "..."
-                : ((data?.stats.totalCommission || 0) * 1.19).toFixed(2)}{" "}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <InfoIcon className="h-3 w-3 inline-block ml-1 align-text-bottom relative -top-[1px] text-muted-foreground" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p>
-                      This is an approximate value based on current exchange
-                      rates. Actual earnings may vary slightly.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <br />
-              30% Commission
+            <div className="text-xs text-muted-foreground mt-1">
+              {data?.stats?.totalRefunds && data.stats.totalRefunds > 0 ? (
+                <span>
+                  <span className="text-destructive">After refunds</span> · 30%
+                  Commission
+                </span>
+              ) : (
+                "30% Commission"
+              )}
             </div>
           </CardContent>
         </Card>

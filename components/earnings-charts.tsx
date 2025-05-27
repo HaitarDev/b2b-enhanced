@@ -25,6 +25,7 @@ import { DateRangePicker } from "@/components/date-range-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEarningsData } from "@/hooks/use-earnings-data";
 import { useState } from "react";
+import { formatCurrency } from "@/lib/utils";
 
 // Define chart configurations
 const earningsChartConfig = {
@@ -199,14 +200,14 @@ export function EarningsCharts() {
                           axisLine={false}
                           tickLine={false}
                           tickMargin={10}
-                          tickFormatter={(value) => `£${value}`}
+                          tickFormatter={(value) => formatCurrency(value)}
                         />
                         <Tooltip
                           content={
                             <CustomTooltip
                               dataKey="Earnings"
                               formatter={(value: number) =>
-                                `£${value.toFixed(2)}`
+                                formatCurrency(value)
                               }
                             />
                           }

@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/tooltip";
 import { useEarningsData } from "@/hooks/use-earnings-data";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CurrencyDisplay } from "@/components/currency-display";
+import { formatCurrency } from "@/lib/utils";
 
 export function EarningsOverview() {
   const { data, isLoading, dateRange, formattedDateRange, updateDateRange } =
@@ -44,9 +46,23 @@ export function EarningsOverview() {
   const earnings = data?.earnings ?? 0;
   const sales = data?.sales ?? 0;
   const commission = data?.commission ?? 30;
+  const hasRefunds = data?.refunds && data.refunds > 0;
 
-  // Exchange rate: 1 GBP = 1.19 EUR (approximate)
-  const exchangeRate = 1.19;
+  // Use net earnings if refunds are present
+  const displayedEarnings =
+    hasRefunds && data?.netEarnings !== undefined ? data.netEarnings : earnings;
+
+  // Add refund information text if refunds are present
+  const earningsLabel = hasRefunds ? (
+    <span className="text-xs text-muted-foreground">
+      <span className="font-medium text-destructive">After refunds</span>{" "}
+      (Refunded amount: {formatCurrency(data?.refunds || 0)})
+    </span>
+  ) : (
+    <span className="text-xs text-muted-foreground">
+      For the selected period
+    </span>
+  );
 
   return (
     <div className="space-y-4">
@@ -74,33 +90,13 @@ export function EarningsOverview() {
             {isLoading ? (
               <Skeleton className="h-8 w-24" />
             ) : (
-              <div className="text-2xl font-semibold">
-                £{earnings.toFixed(2)}
-              </div>
+              <CurrencyDisplay
+                amount={displayedEarnings}
+                sourceCurrency="GBP"
+                showApprox={true}
+              />
             )}
-            <div className="text-xs text-muted-foreground">
-              <span className="font-medium">Approx.</span>{" "}
-              {isLoading ? (
-                <Skeleton className="inline-block h-3 w-16" />
-              ) : (
-                `€${(earnings * exchangeRate).toFixed(2)}`
-              )}{" "}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <InfoIcon className="h-3 w-3 inline-block ml-1 align-text-bottom relative -top-[1px] text-muted-foreground" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p>
-                      This is an approximate value based on current exchange
-                      rates. Actual earnings may vary slightly.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <br />
-              For the selected period
-            </div>
+            <div className="text-xs text-muted-foreground">{earningsLabel}</div>
           </CardContent>
         </Card>
 

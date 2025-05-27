@@ -7,6 +7,13 @@ import { z } from "zod";
 import { CameraIcon, InstagramIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +60,9 @@ const settingsFormSchema = z.object({
     })
     .optional()
     .or(z.literal("")),
+  currency: z.enum(["GBP", "EUR", "USD", "DKK"], {
+    required_error: "Please select a currency.",
+  }),
 });
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
@@ -87,6 +97,7 @@ export function SettingsForm() {
       email: "",
       bio: "",
       instagramLink: "",
+      currency: "GBP",
     },
     values: userData
       ? {
@@ -94,6 +105,7 @@ export function SettingsForm() {
           email: userData.profile.email || "",
           bio: userData.profile.bio || "",
           instagramLink: userData.profile.instagram || "",
+          currency: userData.profile.currency || "GBP",
         }
       : undefined,
   });
@@ -106,13 +118,18 @@ export function SettingsForm() {
         email: userData.profile.email || "",
         bio: userData.profile.bio || "",
         instagramLink: userData.profile.instagram || "",
+        currency: userData.profile.currency || "GBP",
       });
     }
   }, [userData, form]);
 
   // Profile update mutation
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { bio: string; instagram: string }) => {
+    mutationFn: async (data: {
+      bio: string;
+      instagram: string;
+      currency: string;
+    }) => {
       const response = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: {
@@ -184,6 +201,7 @@ export function SettingsForm() {
     updateProfileMutation.mutateAsync({
       bio: data.bio || "",
       instagram: data.instagramLink || "",
+      currency: data.currency,
     });
   }
 
@@ -401,6 +419,37 @@ export function SettingsForm() {
                       </FormControl>
                       <FormDescription>
                         Link to your Instagram profile. (Optional)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="currency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Preferred Currency</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select your preferred currency" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="GBP">British Pound (£)</SelectItem>
+                          <SelectItem value="EUR">Euro (€)</SelectItem>
+                          <SelectItem value="USD">US Dollar ($)</SelectItem>
+                          <SelectItem value="DKK">Danish Krone (kr)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        All earnings and prices will be displayed in your
+                        preferred currency.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

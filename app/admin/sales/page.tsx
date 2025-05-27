@@ -44,6 +44,7 @@ interface CreatorPayout {
   revenue: number;
   payout: number;
   status: PayoutStatus;
+  currency?: string;
 }
 
 const SalesReports = () => {
@@ -72,6 +73,7 @@ const SalesReports = () => {
             created_at, 
             payout_month,
             creator_id,
+            currency,
             profiles(id, name)
           `
           )
@@ -159,6 +161,7 @@ const SalesReports = () => {
             revenue: revenue,
             payout: payoutAmount,
             status: uiStatus,
+            currency: payout.currency || "USD",
           });
         }
 
@@ -387,8 +390,7 @@ const SalesReports = () => {
                 <TableRow>
                   <TableHead>Creator</TableHead>
                   <TableHead>Month</TableHead>
-                  <TableHead>Sales</TableHead>
-                  <TableHead>Revenue</TableHead>
+                  <TableHead>Currency</TableHead>
                   <TableHead>Payout Amount (30%)</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
@@ -397,7 +399,7 @@ const SalesReports = () => {
               <TableBody>
                 {isLoadingPayouts ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={6} className="text-center py-8">
                       <div className="flex justify-center items-center">
                         <Loader2 className="h-6 w-6 animate-spin mr-2" />
                         <span>Loading payout data...</span>
@@ -411,8 +413,7 @@ const SalesReports = () => {
                         {row.creator}
                       </TableCell>
                       <TableCell>{row.month}</TableCell>
-                      <TableCell>{row.sales}</TableCell>
-                      <TableCell>{formatCurrency(row.revenue)}</TableCell>
+                      <TableCell>{row.currency || "USD"}</TableCell>
                       <TableCell>{formatCurrency(row.payout)}</TableCell>
                       <TableCell>
                         <Badge
@@ -468,7 +469,7 @@ const SalesReports = () => {
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={6}
                       className="text-center py-8 text-muted-foreground"
                     >
                       No payout records found. Try adjusting your filters.

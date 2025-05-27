@@ -56,6 +56,8 @@ export interface DashboardStats {
   productsCount: number;
   ordersCount: number;
   approvedProductsCount: number;
+  totalRefunds?: number;
+  netRevenue?: number;
 }
 
 export interface DashboardData {

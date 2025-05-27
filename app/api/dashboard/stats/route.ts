@@ -4,6 +4,7 @@ import {
   createAdminApiClient,
   createGraphQLClient,
   getShopifyAccessToken,
+  safelyFetchProduct,
 } from "@/utils/shopify/client";
 
 type Stats = {
@@ -14,12 +15,16 @@ type Stats = {
   productsCount: number;
   ordersCount: number;
   approvedProductsCount: number;
+  totalRefunds: number;
+  netRevenue: number;
 };
 
 type SalesTrendPoint = {
   date: string;
   sales: number;
   revenue: number;
+  refunds: number;
+  netRevenue: number;
 };
 
 // ShopifyOrder type for response data
@@ -264,10 +269,8 @@ async function fetchShopifyProductData(
     const restClient = await createAdminApiClient(accessToken);
     const graphqlClient = await createGraphQLClient(accessToken);
 
-    // Fetch product data from Shopify using REST API
-    const { body: productData } = await restClient.get({
-      path: `products/${productId}`,
-    });
+    // Use the safe fetch method to avoid 404 errors
+    const productData = await safelyFetchProduct(restClient, productId);
 
     // Initialize counters
     let salesCount = 0;
@@ -649,29 +652,18 @@ async function fetchShopifyProductData(
                   // If we don't have specific line item refunds but the order is marked as refunded,
                   // fall back to the old approach for backward compatibility
                   if (
-                    !hasRefunds &&
                     order.displayFinancialStatus &&
                     order.displayFinancialStatus
                       .toUpperCase()
                       .includes("REFUNDED")
                   ) {
-                    // For partially refunded, estimate 50% refund
-                    if (
-                      order.displayFinancialStatus
-                        .toUpperCase()
-                        .includes("PARTIALLY")
-                    ) {
-                      refundAmount = orderRevenue * 0.5;
-                      console.log(
-                        `Order ${order.id} has PARTIALLY_REFUNDED status, estimated refund: ${refundAmount}`
-                      );
-                    } else {
-                      // For fully refunded, use the full amount
-                      refundAmount = orderRevenue;
-                      console.log(
-                        `Order ${order.id} has REFUNDED status, full refund: ${refundAmount}`
-                      );
-                    }
+                    // For any refunded order (partial or full), use the FULL order amount as refund
+                    // This ensures refund === sale amount
+                    refundAmount = orderRevenue;
+                    hasRefunds = true;
+                    console.log(
+                      `Order ${order.id} has REFUNDED status, setting FULL refund: ${refundAmount}`
+                    );
                   }
 
                   // Calculate net revenue (handle safely)
@@ -769,15 +761,24 @@ async function fetchShopifyProductData(
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
+    // Calculate total refund amount
+    const totalRefundAmount = recentOrders.reduce(
+      (sum, order) => sum + (order.refundAmount || 0),
+      0
+    );
+
+    // Calculate net revenue (total revenue minus refunds)
+    const netRevenue = Math.max(0, revenue - totalRefundAmount);
+
     console.log(
-      `FINAL: Product ${productId}: Found ${salesCount} sales with revenue ${revenue}`
+      `FINAL: Product ${productId}: Found ${salesCount} sales with raw revenue ${revenue}, refunds ${totalRefundAmount}, net revenue ${netRevenue}`
     );
 
     return {
       product: productData.product,
       salesCount,
-      revenue,
-      commission: revenue * 0.3, // Artist gets 30%
+      revenue: netRevenue, // Use net revenue (after refunds) as the revenue figure
+      commission: netRevenue * 0.3, // Artist gets 30% of net revenue
       recentOrders,
     };
   } catch (error) {
@@ -905,6 +906,8 @@ async function getShopifySalesTrend(
     date,
     sales: data.sales,
     revenue: data.revenue,
+    refunds: data.refunds || 0, // Include refund data
+    netRevenue: Math.max(0, data.revenue - (data.refunds || 0)), // Include net revenue
   }));
 }
 
@@ -1107,13 +1110,50 @@ export async function GET(req: Request) {
         (p) => p.status === "approved"
       ).length;
 
+      // IMPORTANT: Since we've already subtracted refunds at the product level in fetchShopifyProductData,
+      // the revenue values in products[] already represent net revenue (after refunds).
+      // Using these values directly will prevent double-counting of refunds.
+      const totalRevenue = products.reduce(
+        (sum, p) => sum + (p.revenue || 0),
+        0
+      );
+
+      // For display and reporting purposes, calculate the total refund amount
+      // But don't subtract this again from revenue
+      const totalRefunds = shopifyOrders
+        .filter((order) => {
+          return (
+            order.financialStatus?.toLowerCase() === "refunded" ||
+            (order.refundAmount && order.refundAmount > 0)
+          );
+        })
+        .reduce((sum, order) => {
+          if (order.financialStatus?.toLowerCase() === "refunded") {
+            const orderTotal = parseFloat(order.totalAmount || "0");
+            console.log(
+              `Tracking refund for order ${order.orderNumber}: £${orderTotal}`
+            );
+            return sum + orderTotal;
+          } else if (order.refundAmount && order.refundAmount > 0) {
+            console.log(
+              `Tracking partial refund for order ${order.orderNumber}: £${order.refundAmount}`
+            );
+            return sum + order.refundAmount;
+          }
+          return sum;
+        }, 0);
+
+      // Since product.revenue is already net of refunds, we don't need to subtract refunds again
+      const netRevenue = totalRevenue;
+
+      console.log(
+        `Stats calculation: Total Revenue (already net of refunds): £${totalRevenue}, Total Refunds (for reporting): £${totalRefunds}`
+      );
+
       return {
-        totalRevenue: products.reduce((sum, p) => sum + (p.revenue || 0), 0),
+        totalRevenue: totalRevenue + totalRefunds, // Add refunds back to show true gross revenue
         totalSales: products.reduce((sum, p) => sum + (p.salesCount || 0), 0),
-        totalCommission: products.reduce(
-          (sum, p) => sum + (p.commission || 0),
-          0
-        ),
+        totalCommission: totalRevenue * 0.3, // Commission based on net revenue (after refunds)
         averageOrderValue: shopifyOrders.length
           ? shopifyOrders.reduce(
               (sum, o) => sum + parseFloat(o.totalAmount || "0"),
@@ -1123,6 +1163,8 @@ export async function GET(req: Request) {
         productsCount: products.length,
         ordersCount: shopifyOrders.length,
         approvedProductsCount,
+        totalRefunds,
+        netRevenue,
       };
     };
 
@@ -1143,14 +1185,16 @@ export async function GET(req: Request) {
     // Function for generating default sales trend when no orders exist
     function generateDefaultSalesTrend(): SalesTrendPoint[] {
       // Get last 6 months
-      const monthlyData: Record<string, { sales: number; revenue: number }> =
-        {};
+      const monthlyData: Record<
+        string,
+        { sales: number; revenue: number; refunds: number }
+      > = {};
       const now = new Date();
 
       for (let i = 5; i >= 0; i--) {
         const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const monthKey = month.toLocaleString("default", { month: "short" });
-        monthlyData[monthKey] = { sales: 0, revenue: 0 };
+        monthlyData[monthKey] = { sales: 0, revenue: 0, refunds: 0 };
       }
 
       // Convert to array format for the chart
@@ -1158,6 +1202,8 @@ export async function GET(req: Request) {
         date,
         sales: data.sales,
         revenue: data.revenue,
+        refunds: data.refunds,
+        netRevenue: Math.max(0, data.revenue - data.refunds),
       }));
     }
 

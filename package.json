@@ -44,12 +44,14 @@
     "@shopify/shopify-api": "^11.12.0",
     "@supabase/ssr": "^0.6.1",
     "@tailwindcss/container-queries": "latest",
-    "@tanstack/react-query": "^5.76.1",
+    "@tanstack/react-query": "^5.76.2",
     "@tanstack/react-table": "^8.21.3",
     "autoprefixer": "^10.4.20",
+    "axios": "^1.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
+    "currency.js": "^2.0.4",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "8.5.1",
     "framer-motion": "^12.12.1",
@@ -68,7 +70,8 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
-    "zod": "latest"
+    "zod": "latest",
+    "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@types/node": "^22",

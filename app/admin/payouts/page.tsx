@@ -53,9 +53,17 @@ interface PayoutResult {
   success: boolean;
   payout_id?: number;
   amount?: number;
+  manualAmount?: number;
   error?: string;
   message?: string;
   currency?: string;
+  products?: Array<{
+    productId: string;
+    title: string;
+    revenue: number;
+    sales: number;
+    currency: string;
+  }>;
 }
 
 interface ApiResponse {
@@ -65,6 +73,7 @@ interface ApiResponse {
     end: string;
   };
   results: PayoutResult[];
+  debug?: Record<string, any>;
 }
 
 interface ExistingPayout {
@@ -79,6 +88,7 @@ interface ExistingPayout {
   };
   name?: string;
   method?: "iban" | "paypal";
+  currency?: string;
 }
 
 export default function AdminPayouts() {
@@ -92,8 +102,18 @@ export default function AdminPayouts() {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
   const [creatorName, setCreatorName] = useState<Record<string, string>>({});
+  const [creatorCurrency, setCreatorCurrency] = useState<
+    Record<string, string>
+  >({});
   const [confirmingGeneration, setConfirmingGeneration] = useState(false);
+  const [manualAmounts, setManualAmounts] = useState<Record<string, number>>(
+    {}
+  );
+  const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
   const queryClient = useQueryClient();
+
+  // Log current state of debugInfo on each render
+  console.log("Current debugInfo state:", debugInfo);
 
   // Helper function to get first and last day of month
   const getMonthDateRange = (date: Date) => {
@@ -179,7 +199,7 @@ export default function AdminPayouts() {
       const { data, error } = await supabase
         .from("payout")
         .select(
-          "id, creator_id, amount, status, created_at, payout_month, name, method"
+          "id, creator_id, amount, status, created_at, payout_month, name, method, currency"
         )
         .gte("created_at", start)
         .lte("created_at", end);
@@ -237,14 +257,23 @@ export default function AdminPayouts() {
     try {
       setIsLoading(true);
       setError(null);
+      setDebugInfo({});
 
       // Get API key from environment variable or use a temporary one for development
       const apiKey = process.env.NEXT_PUBLIC_CRON_API_KEY || "test-key";
       const monthParam = formatMonthParam(selectedDate);
 
-      // Call the payout generation endpoint with preview flag
+      // Prepare manual amounts to send to the API if we have any
+      const manualAmountsString =
+        Object.keys(manualAmounts).length > 0
+          ? `&manual_amounts=${encodeURIComponent(
+              JSON.stringify(manualAmounts)
+            )}`
+          : "";
+
+      // Call the payout generation endpoint with preview flag and exclude_refunds set to true
       const response = await fetch(
-        `/api/cron/monthly-payouts?date=${monthParam}&preview=true`,
+        `/api/cron/monthly-payouts?date=${monthParam}&preview=true&exclude_refunds=true&exclude_refunded_orders=true&remove_full_refunds=true&include_real_shopify_data=true&debug=true&detailed_calculation=true${manualAmountsString}`,
         {
           method: "GET",
           headers: {
@@ -260,22 +289,51 @@ export default function AdminPayouts() {
       const data = (await response.json()) as ApiResponse;
       setProcessingResult(data);
 
-      // Get creator names for display if not already included
-      if (data.results.length > 0 && !data.results[0].creator_name) {
+      // Store debug information if available
+      if (data.debug) {
+        console.log("Debug information received:", data.debug);
+        setDebugInfo(data.debug);
+      } else {
+        console.log("No debug information received from API");
+        // Clear any existing debug data
+        setDebugInfo({});
+      }
+
+      // Get creator names and currencies for display if not already included
+      if (data.results.length > 0) {
         const supabase = createClient();
         const creatorIds = data.results.map((result) => result.creator_id);
 
         const { data: creators } = await supabase
           .from("profiles")
-          .select("id, name")
+          .select("id, name, currency")
           .in("id", creatorIds);
 
+        console.log({ creators });
         if (creators) {
           const namesMap: Record<string, string> = {};
+          const currencyMap: Record<string, string> = {};
+
           creators.forEach((creator) => {
             namesMap[creator.id] = creator.name;
+            currencyMap[creator.id] = creator.currency || "GBP"; // Default to GBP if no currency specified
           });
+
           setCreatorName(namesMap);
+          setCreatorCurrency(currencyMap);
+
+          // Initialize manual amounts with the calculated amounts
+          const initialAmounts: Record<string, number> = {};
+          data.results.forEach((result) => {
+            if (result.amount && result.amount > 0) {
+              // Use manual amount from API response if available, otherwise use calculated amount
+              initialAmounts[result.creator_id] =
+                result.manualAmount !== undefined
+                  ? result.manualAmount
+                  : result.amount;
+            }
+          });
+          setManualAmounts(initialAmounts);
         }
       }
 
@@ -306,36 +364,20 @@ export default function AdminPayouts() {
       setIsLoading(true);
       setError(null);
       setConfirmingGeneration(false);
+      setDebugInfo({});
 
       // Get API key from environment variable or use a temporary one for development
       const apiKey = process.env.NEXT_PUBLIC_CRON_API_KEY || "test-key";
       const monthParam = formatMonthParam(selectedDate);
 
-      // First, get all the creator profiles to check their payment methods
-      const supabase = createClient();
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, payment_method");
-
-      console.log({ profiles });
-
-      if (profilesError) {
-        throw new Error(
-          `Failed to fetch creator profiles: ${profilesError.message}`
-        );
-      }
-
-      // Create a map of creator IDs to payment methods
-      const paymentMethodMap: Record<string, string> = {};
-      profiles.forEach((profile) => {
-        if (profile.id && profile.payment_method) {
-          paymentMethodMap[profile.id] = profile.payment_method;
-        }
-      });
+      // Prepare manual amounts to send to the API
+      const manualAmountsString = encodeURIComponent(
+        JSON.stringify(manualAmounts)
+      );
 
       // Call the payout generation endpoint without preview flag
       const response = await fetch(
-        `/api/cron/monthly-payouts?date=${monthParam}`,
+        `/api/cron/monthly-payouts?date=${monthParam}&exclude_refunds=true&exclude_refunded_orders=true&remove_full_refunds=true&include_real_shopify_data=true&debug=true&detailed_calculation=true&manual_amounts=${manualAmountsString}`,
         {
           method: "GET",
           headers: {
@@ -351,57 +393,13 @@ export default function AdminPayouts() {
       const data = (await response.json()) as ApiResponse;
       console.log("API Response:", data);
 
-      // After generating payouts, we need to find the ones that were just created
-      // Fetch the payouts that were just created for this month
-      const { start, end } = getMonthDateRange(selectedDate);
-
-      // Short delay to ensure database consistency
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const { data: newPayouts, error: fetchError } = await supabase
-        .from("payout")
-        .select("id, creator_id, amount")
-        .gte("created_at", start)
-        .lte("created_at", end);
-
-      if (fetchError) {
-        throw new Error(
-          `Failed to fetch created payouts: ${fetchError.message}`
-        );
+      // Store debug information if available
+      if (data.debug) {
+        console.log("Debug information:", data.debug);
+        setDebugInfo(data.debug);
       }
 
-      console.log("Newly created payouts:", newPayouts);
-
-      // Update each new payout with the corresponding payment method and period
-      if (newPayouts && newPayouts.length > 0) {
-        for (const payout of newPayouts) {
-          const creatorId = payout.creator_id;
-          const creatorMethod = paymentMethodMap[creatorId] || "iban"; // Default to IBAN if not set
-
-          console.log(
-            `Updating payout ${payout.id} for creator ${creatorId} with method ${creatorMethod}`
-          );
-
-          const { error: updateError } = await supabase
-            .from("payout")
-            .update({
-              method: creatorMethod,
-              payout_month: {
-                start: data.period.start,
-                end: data.period.end,
-              },
-            })
-            .eq("id", payout.id);
-
-          if (updateError) {
-            console.error(`Failed to update payout ${payout.id}:`, updateError);
-          }
-        }
-      }
-
-      setProcessingResult(data);
-
-      // Refresh the list of existing payouts
+      // Refresh the list of existing payouts after successful generation
       refetchPayouts();
 
       toast({
@@ -586,6 +584,7 @@ export default function AdminPayouts() {
                 <TableRow>
                   <TableHead>Creator</TableHead>
                   <TableHead>Amount</TableHead>
+                  <TableHead>Currency</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Period</TableHead>
@@ -597,7 +596,14 @@ export default function AdminPayouts() {
                 {existingPayouts.map((payout) => (
                   <TableRow key={payout.id}>
                     <TableCell>{payout.name || payout.creator_id}</TableCell>
-                    <TableCell>{formatCurrency(payout.amount)}</TableCell>
+                    <TableCell>
+                      {formatCurrency(payout.amount, payout.currency || "GBP")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {payout.currency || "GBP"}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       {payout.status === "completed" ? (
                         <Badge className="bg-green-100 text-green-800">
@@ -669,6 +675,12 @@ export default function AdminPayouts() {
             <CardDescription>
               Period: {formatDate(processingResult.period.start)} to{" "}
               {formatDate(processingResult.period.end)}
+              {!existingPayouts?.length && (
+                <span className="block mt-1 text-amber-600">
+                  You can enter manual amounts that will be saved in the
+                  creator's currency.
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -676,38 +688,82 @@ export default function AdminPayouts() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Creator</TableHead>
-                  <TableHead>Amount</TableHead>
+                  <TableHead>Calculated Amount (GBP)</TableHead>
+                  <TableHead>Creator's Currency</TableHead>
+                  {!existingPayouts?.length && (
+                    <TableHead>Manual Amount (Will Be Stored)</TableHead>
+                  )}
                   <TableHead>Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {processingResult.results.length > 0 ? (
-                  processingResult.results.map((result, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        {result.creator_name ||
-                          creatorName[result.creator_id] ||
-                          result.creator_id}
-                      </TableCell>
-                      <TableCell>
-                        {result.amount && result.amount > 0
-                          ? formatCurrency(result.amount)
-                          : "No payout"}
-                      </TableCell>
-                      <TableCell>
-                        {result.amount && result.amount > 0
-                          ? result.success
-                            ? existingPayouts?.length
-                              ? "Already generated"
-                              : "Ready to generate"
-                            : result.error || "Unknown error"
-                          : result.message || "No earnings above threshold"}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  processingResult.results.map((result, index) => {
+                    const creatorCurrencyValue =
+                      creatorCurrency[result.creator_id];
+                    return (
+                      <TableRow key={index}>
+                        <TableCell>
+                          {result.creator_name ||
+                            creatorName[result.creator_id] ||
+                            result.creator_id}
+                        </TableCell>
+                        <TableCell>
+                          {result.amount && result.amount > 0
+                            ? formatCurrency(result.amount, "GBP")
+                            : "No payout"}
+                        </TableCell>
+                        <TableCell>{creatorCurrencyValue || "GBP"}</TableCell>
+                        {!existingPayouts?.length && (
+                          <TableCell>
+                            {result.amount && result.amount > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    className="w-24 p-2 border rounded"
+                                    value={
+                                      manualAmounts[result.creator_id] || ""
+                                    }
+                                    onChange={(e) => {
+                                      const value = parseFloat(e.target.value);
+                                      setManualAmounts((prev) => ({
+                                        ...prev,
+                                        [result.creator_id]: isNaN(value)
+                                          ? 0
+                                          : value,
+                                      }));
+                                    }}
+                                    min="0"
+                                    step="0.01"
+                                  />
+                                  <span>{creatorCurrencyValue || "GBP"}</span>
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  Will be saved in{" "}
+                                  {creatorCurrencyValue || "GBP"}
+                                </span>
+                              </div>
+                            ) : (
+                              "N/A"
+                            )}
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          {result.amount && result.amount > 0
+                            ? result.success
+                              ? existingPayouts?.length
+                                ? "Already generated"
+                                : "Ready to generate"
+                              : result.error || "Unknown error"
+                            : result.message || "No earnings above threshold"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-4">
+                    <TableCell colSpan={5} className="text-center py-4">
                       No payouts were found for this period. Creators may not
                       have sufficient earnings.
                     </TableCell>
@@ -729,6 +785,166 @@ export default function AdminPayouts() {
                 </div>
               </CardFooter>
             )}
+        </Card>
+      )}
+
+      {/* Debug information section - simple version */}
+      {Object.keys(debugInfo).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Real Shopify Order Calculation</CardTitle>
+            <CardDescription>
+              Exact calculation for {formatMonthDisplay(selectedDate)}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-8">
+              {Object.entries(debugInfo).map(
+                ([creatorId, data]: [string, any]) => (
+                  <div key={creatorId} className="border p-4 rounded-md">
+                    <h3 className="text-lg font-bold mb-4">
+                      Creator: {creatorName[creatorId] || creatorId}
+                    </h3>
+
+                    <div className="space-y-1 mb-6">
+                      {/* List all orders */}
+                      {data.allOrders && data.allOrders.length > 0 ? (
+                        <>
+                          <h4 className="font-medium mb-2">
+                            Orders in {formatMonthDisplay(selectedDate)}:
+                          </h4>
+                          {data.allOrders.map((order: any, idx: number) => (
+                            <div
+                              key={idx}
+                              className={`flex justify-between p-2 ${
+                                order.refunded ? "bg-red-50" : ""
+                              }`}
+                            >
+                              <div>
+                                <span className="font-medium">
+                                  {order.orderName}
+                                </span>{" "}
+                                ({formatDate(order.date)}) -{" "}
+                                {order.productTitle}
+                                {order.refunded && (
+                                  <span className="text-red-600 ml-2">
+                                    REFUNDED
+                                  </span>
+                                )}
+                              </div>
+                              <div>
+                                {order.refunded ? (
+                                  <span className="text-red-600">
+                                    -{formatCurrency(order.amount, "GBP")}
+                                  </span>
+                                ) : (
+                                  formatCurrency(order.amount, "GBP")
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          No orders found for this period
+                        </p>
+                      )}
+
+                      {/* If allOrders not available, try to combine included and excluded */}
+                      {!data.allOrders && data.includedOrders && (
+                        <>
+                          <h4 className="font-medium mb-2">Included Orders:</h4>
+                          {data.includedOrders.map(
+                            (order: any, idx: number) => (
+                              <div
+                                key={`included-${idx}`}
+                                className="flex justify-between p-2"
+                              >
+                                <div>
+                                  <span className="font-medium">
+                                    {order.orderName || order.orderId}
+                                  </span>{" "}
+                                  ({formatDate(order.date)}) -{" "}
+                                  {order.productTitle}
+                                </div>
+                                <div>
+                                  {formatCurrency(order.amount || 0, "GBP")}
+                                </div>
+                              </div>
+                            )
+                          )}
+                        </>
+                      )}
+
+                      {!data.allOrders &&
+                        data.excludedOrders &&
+                        data.excludedOrders.length > 0 && (
+                          <>
+                            <h4 className="font-medium text-red-600 mt-4 mb-2">
+                              Excluded/Refunded Orders:
+                            </h4>
+                            {data.excludedOrders.map(
+                              (order: any, idx: number) => (
+                                <div
+                                  key={`excluded-${idx}`}
+                                  className="flex justify-between p-2 bg-red-50"
+                                >
+                                  <div>
+                                    <span className="font-medium">
+                                      {order.orderName || order.orderId}
+                                    </span>{" "}
+                                    ({formatDate(order.date)}) -{" "}
+                                    {order.productTitle}
+                                    <span className="text-red-600 ml-2">
+                                      REFUNDED
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-red-600">
+                                      -
+                                      {formatCurrency(
+                                        order.originalAmount ||
+                                          order.amount ||
+                                          0,
+                                        "GBP"
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </>
+                        )}
+                    </div>
+
+                    {/* Total calculation */}
+                    <div className="border-t pt-4 mt-4">
+                      <div className="flex justify-between font-bold">
+                        <span>Total Non-Refunded Revenue:</span>
+                        <span>
+                          {formatCurrency(data.totalRevenue || 0, "GBP")}
+                        </span>
+                      </div>
+                      <div className="flex justify-between mt-2">
+                        <span>Creator Commission (30%):</span>
+                        <span>
+                          {formatCurrency(
+                            (data.totalRevenue || 0) * 0.3,
+                            "GBP"
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-2 mt-4 bg-red-50 text-red-700 rounded-md text-sm">
+                      Note: All refunded orders are completely excluded from
+                      revenue calculations.
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          </CardContent>
         </Card>
       )}
     </div>

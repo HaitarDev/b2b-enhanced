@@ -576,6 +576,12 @@ export async function GET(request: Request) {
     const dateParam = url.searchParams.get("date");
     const previewMode = url.searchParams.get("preview") === "true";
 
+    // Get manual amounts from the request if provided
+    const manualAmountsParam = url.searchParams.get("manual_amounts");
+    const manualAmounts = manualAmountsParam
+      ? JSON.parse(manualAmountsParam)
+      : {};
+
     const supabase = await createClient();
     const { firstDay, lastDay } = getMonthDateRange(dateParam || undefined);
 
@@ -588,7 +594,7 @@ export async function GET(request: Request) {
     // Get all approved creators
     const { data: creators, error: creatorsError } = await supabase
       .from("profiles")
-      .select("id, name, vendor, email, payment_method")
+      .select("id, name, vendor, email, payment_method, currency")
       .eq("role", "creator")
       .eq("approved", true);
 
@@ -780,12 +786,20 @@ export async function GET(request: Request) {
       // Format the amount with 2 decimal places
       const formattedAmount = Math.round(creatorCommission * 100) / 100;
 
+      // Get creator's currency or default to GBP
+      const creatorCurrency = creator.currency || "GBP";
+
+      // Check if there's a manual amount for this creator
+      const manualAmount = manualAmounts[creator.id];
+      const finalAmount =
+        manualAmount !== undefined ? manualAmount : formattedAmount;
+
       // Check if we're in preview mode - don't create payouts if we are
       if (previewMode) {
         console.log(
-          `[PREVIEW MODE] Would create payout of ${formattedAmount.toFixed(
+          `[PREVIEW MODE] Would create payout of ${finalAmount.toFixed(
             2
-          )} ${mainCurrency} for creator ${creator.id}`
+          )} ${creatorCurrency} for creator ${creator.id}`
         );
 
         // Include a list of all revenue-generating products in the preview results
@@ -798,20 +812,22 @@ export async function GET(request: Request) {
           creator_name: creator.name,
           success: true,
           message: "Payout preview generated",
-          amount: formattedAmount,
-          currency: mainCurrency,
+          amount: formattedAmount, // This is the calculated amount
+          manualAmount: manualAmount, // Include manual amount if provided
+          currency: creatorCurrency, // Use creator's currency
           products: productRevenueData,
           revenueProducts: productsWithRevenue.length,
         });
-        continue; // Skip the actual database insert
+        continue;
       }
 
       // Create payout record (only in non-preview mode)
       const { error: payoutError } = await supabase.from("payout").insert({
         creator_id: creator.id,
-        amount: formattedAmount,
+        amount: finalAmount, // Use manual amount if provided, otherwise use calculated amount
         status: "pending",
         method: creator.payment_method || "iban", // Include payment method from creator profile
+        currency: creatorCurrency, // Add creator's currency
         created_at: new Date().toISOString(),
         payout_month: { start: firstDay, end: lastDay }, // Store the date range as JSON
         name: creator.name, // Store creator name for easy reference
@@ -830,9 +846,9 @@ export async function GET(request: Request) {
         });
       } else {
         console.log(
-          `Created payout of ${formattedAmount.toFixed(
+          `Created payout of ${finalAmount.toFixed(
             2
-          )} ${mainCurrency} for creator ${creator.id}`
+          )} ${creatorCurrency} for creator ${creator.id}`
         );
 
         // Include a list of all revenue-generating products in the payout results
@@ -845,8 +861,9 @@ export async function GET(request: Request) {
           creator_name: creator.name,
           success: true,
           message: "Payout created successfully",
-          amount: formattedAmount, // Use the formatted amount to match what's stored in DB
-          currency: mainCurrency,
+          amount: finalAmount, // Use the final amount to match what's stored in DB
+          manualAmount: manualAmount, // Include manual amount if provided
+          currency: creatorCurrency, // Use creator's currency
           products: productRevenueData, // Include all products for full visibility
           revenueProducts: productsWithRevenue.length, // Count of products with revenue
         });

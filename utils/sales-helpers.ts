@@ -41,9 +41,9 @@ export function countTotalSales<
 }
 
 /**
- * Calculate total revenue from orders, accounting for refunds
+ * Calculate total revenue from orders, excluding refunded orders
  * @param orders Array of orders to calculate revenue from
- * @returns Total revenue amount
+ * @returns Total revenue amount (excluding refunded orders)
  */
 export function calculateTotalRevenue<
   T extends {
@@ -58,7 +58,12 @@ export function calculateTotalRevenue<
   if (!orders || !Array.isArray(orders)) return 0;
 
   orders.forEach((order) => {
-    // First determine the order amount
+    // Skip refunded or cancelled orders entirely when calculating revenue
+    if (order.status === "Refunded" || order.status === "Cancelled") {
+      return;
+    }
+
+    // Calculate the order amount
     let orderAmount = 0;
 
     if ("totalAmount" in order && order.totalAmount) {
@@ -72,22 +77,77 @@ export function calculateTotalRevenue<
       orderAmount = order.total;
     }
 
-    // Handle refunds if available
-    if ("refundAmount" in order && typeof order.refundAmount === "number") {
-      // If it's refunded or canceled, don't count it or subtract the refund
-      if (order.status === "Refunded" || order.status === "Cancelled") {
-        totalRevenue += Math.max(0, orderAmount - order.refundAmount);
-      } else {
-        // For other statuses, use the full amount
-        totalRevenue += orderAmount;
-      }
-    } else {
-      // If no refund information, just use the order amount
-      totalRevenue += orderAmount;
-    }
+    totalRevenue += orderAmount;
   });
 
   return totalRevenue;
+}
+
+/**
+ * Calculate total refund amount across all orders
+ * For refunded orders, use the full order amount as the refund amount
+ * @param orders Array of orders to calculate refunds from
+ * @returns Total refund amount
+ */
+export function calculateTotalRefunds<
+  T extends {
+    totalAmount?: string | number;
+    total?: number;
+    refundAmount?: number;
+    status?: string;
+  }
+>(orders: T[]): number {
+  let totalRefunds = 0;
+
+  if (!orders || !Array.isArray(orders)) return 0;
+
+  orders.forEach((order) => {
+    // For refunded orders, use the full order amount as refund amount
+    if (order.status === "Refunded") {
+      let orderAmount = 0;
+
+      if ("totalAmount" in order && order.totalAmount) {
+        // Handle ShopifyOrder format
+        orderAmount =
+          typeof order.totalAmount === "string"
+            ? parseFloat(order.totalAmount)
+            : order.totalAmount;
+      } else if ("total" in order && typeof order.total === "number") {
+        // Handle EnhancedOrder format
+        orderAmount = order.total;
+      }
+
+      // Use full order amount for refunded orders
+      totalRefunds += orderAmount;
+    } else if (
+      order.status !== "Cancelled" &&
+      "refundAmount" in order &&
+      typeof order.refundAmount === "number"
+    ) {
+      // For non-refunded and non-cancelled orders, add any partial refunds
+      totalRefunds += order.refundAmount;
+    }
+  });
+
+  return totalRefunds;
+}
+
+/**
+ * Calculate net revenue (total revenue minus refunds)
+ * @param orders Array of orders to calculate net revenue from
+ * @returns Net revenue amount
+ */
+export function calculateNetRevenue<
+  T extends {
+    totalAmount?: string | number;
+    total?: number;
+    refundAmount?: number;
+    status?: string;
+  }
+>(orders: T[]): number {
+  const totalRevenue = calculateTotalRevenue(orders);
+  const totalRefunds = calculateTotalRefunds(orders);
+  return totalRevenue - totalRefunds;
 }
 
 /**
