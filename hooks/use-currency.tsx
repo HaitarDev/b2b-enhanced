@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import {
   SupportedCurrency,
@@ -9,10 +9,12 @@ import {
   formatCurrency,
 } from "@/lib/currency";
 import { useQueryClientContext } from "@/components/query-provider";
+import { eventBus, APP_EVENTS } from "@/lib/events";
 
 export function useCurrency() {
   const [userCurrency, setUserCurrency] = useState<SupportedCurrency>("GBP");
   const [isLoading, setIsLoading] = useState(true);
+  const [version, setVersion] = useState(0);
   const supabase = createClient();
 
   // Try first with react-query's useQueryClient
@@ -80,6 +82,13 @@ export function useCurrency() {
   // Update user currency preference
   const updateUserCurrency = async (newCurrency: SupportedCurrency) => {
     try {
+      if (newCurrency === userCurrency) {
+        return true; // No change needed
+      }
+
+      // Important: Don't set loading to true during currency updates
+      // This causes the UI to show skeletons unnecessarily
+
       // Always update localStorage for better UX
       if (typeof window !== "undefined") {
         localStorage.setItem("userCurrency", newCurrency);
@@ -87,6 +96,17 @@ export function useCurrency() {
 
       // Update local state immediately for responsive UI
       setUserCurrency(newCurrency);
+      setVersion((prev) => prev + 1); // Increment version to force re-renders
+
+      // Emit global event for real-time updates across components
+      // Only emit the event if the currency has actually changed
+      // This is to prevent circular event emissions
+      if (newCurrency !== userCurrency) {
+        eventBus.emit(APP_EVENTS.CURRENCY_CHANGED, newCurrency);
+      }
+
+      // The following is the "slower" part - database updates
+      // But the UI is already updated by this point
 
       // Get current authenticated user
       const {
@@ -108,9 +128,13 @@ export function useCurrency() {
         throw error;
       }
 
-      // Invalidate query cache if queryClient is available
+      // Don't invalidate all queries - we only want to update currency display
+      // Specific currency-related queries can be invalidated
       if (queryClient) {
         queryClient.invalidateQueries({ queryKey: ["userCurrency"] });
+        // No need to invalidate or refetch everything
+        // queryClient.invalidateQueries({ queryKey: ["dashboard-data"] });
+        // queryClient.refetchQueries({ queryKey: ["dashboard"] });
       }
 
       return true;
@@ -120,18 +144,24 @@ export function useCurrency() {
     }
   };
 
-  // Helper for currency conversion
-  const convert = async (
-    amount: number,
-    fromCurrency: SupportedCurrency = "GBP"
-  ): Promise<number> => {
-    return await convertCurrency(amount, fromCurrency, userCurrency);
-  };
+  // Helper for currency conversion - memoized with current currency
+  const convert = useCallback(
+    async (
+      amount: number,
+      fromCurrency: SupportedCurrency = "GBP"
+    ): Promise<number> => {
+      return await convertCurrency(amount, fromCurrency, userCurrency);
+    },
+    [userCurrency]
+  );
 
-  // Helper for formatting currency
-  const format = (amount: number): string => {
-    return formatCurrency(amount, userCurrency);
-  };
+  // Helper for formatting currency - memoized with current currency
+  const format = useCallback(
+    (amount: number): string => {
+      return formatCurrency(amount, userCurrency);
+    },
+    [userCurrency]
+  );
 
   return {
     userCurrency,
@@ -139,5 +169,6 @@ export function useCurrency() {
     isLoading,
     convert,
     format,
+    version, // Expose version for force re-renders
   };
 }

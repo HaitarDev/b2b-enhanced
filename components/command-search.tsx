@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
   Calculator,
   Calendar,
@@ -32,7 +32,7 @@ import {
   List,
   LayoutGrid,
   GalleryVertical,
-} from "lucide-react"
+} from "lucide-react";
 
 import {
   CommandDialog,
@@ -42,10 +42,10 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from "@/components/ui/command"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
+} from "@/components/ui/command";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Define our item types
 type Category =
@@ -58,45 +58,50 @@ type Category =
   | "analytics"
   | "users"
   | "products"
-  | "help"
+  | "help";
 
 interface CommandItemType {
-  id: string
-  name: string
-  description?: string
-  icon: React.ReactNode
-  category: Category
-  shortcut?: string
-  tags?: string[]
-  action?: () => void
-  date?: string
+  id: string;
+  name: string;
+  description?: string;
+  icon: React.ReactNode;
+  category: Category;
+  shortcut?: string;
+  tags?: string[];
+  action?: () => void;
+  date?: string;
   author?: {
-    name: string
-    avatar?: string
-    email?: string
-  }
-  status?: "active" | "archived" | "draft" | "published" | "pending"
-  priority?: "low" | "medium" | "high"
-  views?: number
-  size?: string
-  location?: string
-  url?: string
-  metadata?: Record<string, string>
+    name: string;
+    avatar?: string;
+    email?: string;
+  };
+  status?: "active" | "archived" | "draft" | "published" | "pending";
+  priority?: "low" | "medium" | "high";
+  views?: number;
+  size?: string;
+  location?: string;
+  url?: string;
+  metadata?: Record<string, string>;
 }
 
 interface CommandSearchProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
-  const [inputValue, setInputValue] = React.useState("")
-  const [selectedCategory, setSelectedCategory] = React.useState<Category>("all")
-  const [loading, setLoading] = React.useState(false)
-  const [recentSearches, setRecentSearches] = React.useState<string[]>([])
-  const [viewMode, setViewMode] = React.useState<"list" | "grid" | "detailed">("list")
-  const [sortBy, setSortBy] = React.useState<"name" | "date" | "priority" | "views">("name")
-  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("asc")
+  const [inputValue, setInputValue] = React.useState("");
+  const [selectedCategory, setSelectedCategory] =
+    React.useState<Category>("all");
+  const [loading, setLoading] = React.useState(false);
+  const [recentSearches, setRecentSearches] = React.useState<string[]>([]);
+  const [viewMode, setViewMode] = React.useState<"list" | "grid" | "detailed">(
+    "list"
+  );
+  const [sortBy, setSortBy] = React.useState<
+    "name" | "date" | "priority" | "views"
+  >("name");
+  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("asc");
 
   // Sample data for our command items
   const commandItems: CommandItemType[] = [
@@ -241,17 +246,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
       date: "2023-05-14",
       status: "active",
     },
-    {
-      id: "13",
-      name: "Billing",
-      description: "Manage your subscription and payment methods",
-      icon: <CreditCard className="h-4 w-4" />,
-      category: "settings",
-      tags: ["payment", "subscription", "invoice", "billing"],
-      shortcut: "⌘B",
-      date: "2023-05-11",
-      status: "active",
-    },
+
     {
       id: "14",
       name: "Security",
@@ -452,124 +447,151 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
       views: 320,
       priority: "medium",
     },
-  ]
+  ];
 
   // Filter items based on search input and selected category
   const filteredItems = React.useMemo(() => {
-    let items = [...commandItems]
+    let items = [...commandItems];
 
     // Filter by category
     if (selectedCategory !== "all") {
-      items = items.filter((item) => item.category === selectedCategory)
+      items = items.filter((item) => item.category === selectedCategory);
     }
 
     // Filter by search term
     if (inputValue) {
-      const searchTerm = inputValue.toLowerCase()
+      const searchTerm = inputValue.toLowerCase();
       items = items.filter(
         (item) =>
           item.name.toLowerCase().includes(searchTerm) ||
-          (item.description && item.description.toLowerCase().includes(searchTerm)) ||
-          (item.tags && item.tags.some((tag) => tag.toLowerCase().includes(searchTerm))),
-      )
+          (item.description &&
+            item.description.toLowerCase().includes(searchTerm)) ||
+          (item.tags &&
+            item.tags.some((tag) => tag.toLowerCase().includes(searchTerm)))
+      );
     }
 
     // Sort items
     items.sort((a, b) => {
       if (sortBy === "name") {
-        return sortOrder === "asc" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+        return sortOrder === "asc"
+          ? a.name.localeCompare(b.name)
+          : b.name.localeCompare(a.name);
       } else if (sortBy === "date" && a.date && b.date) {
         return sortOrder === "asc"
           ? new Date(a.date).getTime() - new Date(b.date).getTime()
-          : new Date(b.date).getTime() - new Date(a.date).getTime()
+          : new Date(b.date).getTime() - new Date(a.date).getTime();
       } else if (sortBy === "priority") {
-        const priorityValue = { high: 3, medium: 2, low: 1, undefined: 0 }
+        const priorityValue = { high: 3, medium: 2, low: 1, undefined: 0 };
         return sortOrder === "asc"
-          ? (priorityValue[a.priority || "undefined"] || 0) - (priorityValue[b.priority || "undefined"] || 0)
-          : (priorityValue[b.priority || "undefined"] || 0) - (priorityValue[a.priority || "undefined"] || 0)
-      } else if (sortBy === "views" && a.views !== undefined && b.views !== undefined) {
-        return sortOrder === "asc" ? a.views - b.views : b.views - a.views
+          ? (priorityValue[a.priority || "undefined"] || 0) -
+              (priorityValue[b.priority || "undefined"] || 0)
+          : (priorityValue[b.priority || "undefined"] || 0) -
+              (priorityValue[a.priority || "undefined"] || 0);
+      } else if (
+        sortBy === "views" &&
+        a.views !== undefined &&
+        b.views !== undefined
+      ) {
+        return sortOrder === "asc" ? a.views - b.views : b.views - a.views;
       }
-      return 0
-    })
+      return 0;
+    });
 
-    return items
-  }, [inputValue, selectedCategory, sortBy, sortOrder])
+    return items;
+  }, [inputValue, selectedCategory, sortBy, sortOrder]);
 
   // Handle keyboard shortcut to open the command dialog
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        onOpenChange(!open)
+        e.preventDefault();
+        onOpenChange(!open);
       }
-    }
+    };
 
-    document.addEventListener("keydown", down)
-    return () => document.removeEventListener("keydown", down)
-  }, [onOpenChange, open])
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, [onOpenChange, open]);
 
   // Simulate loading state when changing categories
   const handleCategoryChange = (category: Category) => {
-    setLoading(true)
-    setSelectedCategory(category)
+    setLoading(true);
+    setSelectedCategory(category);
 
     // Simulate API call or data processing
     setTimeout(() => {
-      setLoading(false)
-    }, 300)
-  }
+      setLoading(false);
+    }, 300);
+  };
 
   // Handle command selection
   const handleSelect = (item: CommandItemType) => {
     // Add to recent searches if it's not already there
     if (!recentSearches.includes(item.name)) {
-      setRecentSearches((prev) => [item.name, ...prev].slice(0, 5))
+      setRecentSearches((prev) => [item.name, ...prev].slice(0, 5));
     }
 
     // Execute the action
     if (item.action) {
-      item.action()
+      item.action();
     } else if (item.url) {
-      window.location.href = item.url
+      window.location.href = item.url;
     }
 
     // Close the dialog
-    onOpenChange(false)
-  }
+    onOpenChange(false);
+  };
 
   // Get category count
   const getCategoryCount = (category: Category) => {
-    return category === "all" ? commandItems.length : commandItems.filter((item) => item.category === category).length
-  }
+    return category === "all"
+      ? commandItems.length
+      : commandItems.filter((item) => item.category === category).length;
+  };
 
   // Render priority badge
   const renderPriorityBadge = (priority?: "low" | "medium" | "high") => {
-    if (!priority) return null
+    if (!priority) return null;
 
     const variants = {
       low: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+      medium:
+        "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
       high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
-    }
+    };
 
-    return <span className={`text-xs px-2 py-1 rounded-full ${variants[priority]}`}>{priority}</span>
-  }
+    return (
+      <span className={`text-xs px-2 py-1 rounded-full ${variants[priority]}`}>
+        {priority}
+      </span>
+    );
+  };
 
   // Render status badge
   const renderStatusBadge = (status?: string) => {
-    if (!status) return null
+    if (!status) return null;
 
     const variants: Record<string, string> = {
-      active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+      active:
+        "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
       archived: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
-      draft: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-      published: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-      pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-    }
+      draft:
+        "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+      published:
+        "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+      pending:
+        "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+    };
 
-    return <span className={`text-xs px-2 py-1 rounded-full ${variants[status] || ""}`}>{status}</span>
-  }
+    return (
+      <span
+        className={`text-xs px-2 py-1 rounded-full ${variants[status] || ""}`}
+      >
+        {status}
+      </span>
+    );
+  };
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
@@ -583,7 +605,12 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
           />
           <div className="absolute right-2 top-3 flex items-center gap-2">
             {inputValue && (
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setInputValue("")}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setInputValue("")}
+              >
                 <X className="h-4 w-4" />
               </Button>
             )}
@@ -680,10 +707,10 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
             onChange={(e) => {
               const [newSortBy, newSortOrder] = e.target.value.split("-") as [
                 "name" | "date" | "priority" | "views",
-                "asc" | "desc",
-              ]
-              setSortBy(newSortBy)
-              setSortOrder(newSortOrder)
+                "asc" | "desc"
+              ];
+              setSortBy(newSortBy);
+              setSortOrder(newSortOrder);
             }}
           >
             <option value="name-asc">Name (A-Z)</option>
@@ -712,7 +739,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
                         <CommandItem
                           key={search}
                           onSelect={() => {
-                            setInputValue(search)
+                            setInputValue(search);
                           }}
                         >
                           <Search className="mr-2 h-4 w-4" />
@@ -728,7 +755,9 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
                   <CommandEmpty>
                     <div className="flex flex-col items-center justify-center py-6">
                       <Smile className="h-10 w-10 text-muted-foreground mb-2" />
-                      <p className="text-muted-foreground">No results found for "{inputValue}"</p>
+                      <p className="text-muted-foreground">
+                        No results found for "{inputValue}"
+                      </p>
                     </div>
                   </CommandEmpty>
                 ) : (
@@ -736,45 +765,60 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
                     {viewMode === "list" && (
                       <div>
                         {/* Group items by category */}
-                        {(["pages", "tools", "settings", "messages", "documents", "analytics"] as const).map(
-                          (category) => {
-                            const categoryItems = filteredItems.filter((item) => item.category === category)
-                            if (categoryItems.length === 0) return null
+                        {(
+                          [
+                            "pages",
+                            "tools",
+                            "settings",
+                            "messages",
+                            "documents",
+                            "analytics",
+                          ] as const
+                        ).map((category) => {
+                          const categoryItems = filteredItems.filter(
+                            (item) => item.category === category
+                          );
+                          if (categoryItems.length === 0) return null;
 
-                            return (
-                              <CommandGroup
-                                key={category}
-                                heading={category.charAt(0).toUpperCase() + category.slice(1)}
-                              >
-                                {categoryItems.map((item) => (
-                                  <CommandItem
-                                    key={item.id}
-                                    onSelect={() => handleSelect(item)}
-                                    className="flex items-center justify-between"
-                                  >
-                                    <div className="flex items-center">
-                                      {item.icon}
-                                      <div className="ml-2">
-                                        <p>{item.name}</p>
-                                        {item.description && (
-                                          <p className="text-xs text-muted-foreground">{item.description}</p>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      {item.priority && renderPriorityBadge(item.priority)}
-                                      {item.shortcut && (
-                                        <kbd className="ml-auto flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100">
-                                          {item.shortcut}
-                                        </kbd>
+                          return (
+                            <CommandGroup
+                              key={category}
+                              heading={
+                                category.charAt(0).toUpperCase() +
+                                category.slice(1)
+                              }
+                            >
+                              {categoryItems.map((item) => (
+                                <CommandItem
+                                  key={item.id}
+                                  onSelect={() => handleSelect(item)}
+                                  className="flex items-center justify-between"
+                                >
+                                  <div className="flex items-center">
+                                    {item.icon}
+                                    <div className="ml-2">
+                                      <p>{item.name}</p>
+                                      {item.description && (
+                                        <p className="text-xs text-muted-foreground">
+                                          {item.description}
+                                        </p>
                                       )}
                                     </div>
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            )
-                          },
-                        )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {item.priority &&
+                                      renderPriorityBadge(item.priority)}
+                                    {item.shortcut && (
+                                      <kbd className="ml-auto flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100">
+                                        {item.shortcut}
+                                      </kbd>
+                                    )}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -789,16 +833,23 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center">
                                 {item.icon}
-                                <span className="ml-2 font-medium">{item.name}</span>
+                                <span className="ml-2 font-medium">
+                                  {item.name}
+                                </span>
                               </div>
-                              {item.priority && renderPriorityBadge(item.priority)}
+                              {item.priority &&
+                                renderPriorityBadge(item.priority)}
                             </div>
                             {item.description && (
-                              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{item.description}</p>
+                              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                                {item.description}
+                              </p>
                             )}
                             <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
                               <span>{item.category}</span>
-                              {item.views !== undefined && <span>{item.views.toLocaleString()} views</span>}
+                              {item.views !== undefined && (
+                                <span>{item.views.toLocaleString()} views</span>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -817,15 +868,20 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
                               <div className="flex items-center gap-2">
                                 {item.icon}
                                 <div>
-                                  <h4 className="text-sm font-medium">{item.name}</h4>
+                                  <h4 className="text-sm font-medium">
+                                    {item.name}
+                                  </h4>
                                   {item.description && (
-                                    <p className="text-xs text-muted-foreground">{item.description}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {item.description}
+                                    </p>
                                   )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
                                 {item.status && renderStatusBadge(item.status)}
-                                {item.priority && renderPriorityBadge(item.priority)}
+                                {item.priority &&
+                                  renderPriorityBadge(item.priority)}
                                 {item.shortcut && (
                                   <kbd className="flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100">
                                     {item.shortcut}
@@ -836,22 +892,26 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
                             <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                               {item.category && (
                                 <div>
-                                  <span className="font-medium">Category:</span> {item.category}
+                                  <span className="font-medium">Category:</span>{" "}
+                                  {item.category}
                                 </div>
                               )}
                               {item.date && (
                                 <div>
-                                  <span className="font-medium">Date:</span> {item.date}
+                                  <span className="font-medium">Date:</span>{" "}
+                                  {item.date}
                                 </div>
                               )}
                               {item.views !== undefined && (
                                 <div>
-                                  <span className="font-medium">Views:</span> {item.views.toLocaleString()}
+                                  <span className="font-medium">Views:</span>{" "}
+                                  {item.views.toLocaleString()}
                                 </div>
                               )}
                               {item.tags && item.tags.length > 0 && (
                                 <div className="col-span-2">
-                                  <span className="font-medium">Tags:</span> {item.tags.join(", ")}
+                                  <span className="font-medium">Tags:</span>{" "}
+                                  {item.tags.join(", ")}
                                 </div>
                               )}
                             </div>
@@ -867,5 +927,5 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
         </CommandList>
       </div>
     </CommandDialog>
-  )
+  );
 }

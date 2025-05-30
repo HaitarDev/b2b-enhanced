@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -14,6 +15,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -23,14 +25,41 @@ import { useDashboardData } from "@/hooks/use-dashboard-data";
 import { ExternalLinkIcon } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
+// Helper function to get badge styling based on status
+const getStatusBadgeStyle = (status: string) => {
+  switch (status.toLowerCase()) {
+    case "approved":
+      return "bg-green-50 text-green-700 border-green-200 hover:bg-green-50 dark:bg-green-950 dark:text-green-300 dark:border-green-800";
+    case "rejected":
+      return "bg-red-50 text-red-700 border-red-200 hover:bg-red-50 dark:bg-red-950 dark:text-red-300 dark:border-red-800";
+    case "pending":
+      return "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-50 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800";
+    case "processing":
+    case "processed":
+      return "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800";
+    case "will be deleted":
+      return "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800";
+    case "deleted":
+      return "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-50 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800";
+    default:
+      return "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-50 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800";
+  }
+};
+
 export function ProductsTable() {
   const { data, isLoading } = useDashboardData();
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  // Only show approved products
+  // Only show approved products and sort them in descending order (most recent first)
   const approvedProducts =
-    data?.products.filter((product) => product.status === "approved") || [];
+    data?.products
+      .filter((product) => product.status === "approved")
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ) || [];
 
   const paginatedProducts = approvedProducts.slice(
     (page - 1) * pageSize,
@@ -116,11 +145,8 @@ export function ProductsTable() {
                         </TableCell>
                         <TableCell>
                           <Badge
-                            variant={
-                              product.status === "approved"
-                                ? "default"
-                                : "secondary"
-                            }
+                            variant="outline"
+                            className={getStatusBadgeStyle(product.status)}
                           >
                             {product.status}
                           </Badge>
@@ -193,6 +219,16 @@ export function ProductsTable() {
           </>
         )}
       </CardContent>
+      <CardFooter className="flex justify-end">
+        <Button
+          variant="outline"
+          onClick={() => router.push("/dashboard/products")}
+          className="flex items-center gap-1"
+        >
+          Show All
+          <ExternalLinkIcon className="h-4 w-4" />
+        </Button>
+      </CardFooter>
     </Card>
   );
 }

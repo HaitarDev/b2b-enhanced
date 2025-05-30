@@ -179,13 +179,20 @@ export function ChartAreaInteractive() {
       // Daily format for shorter time periods
       const endDate = new Date();
       const startDate =
-        timeRange === "7d" ? subDays(endDate, 7) : subDays(endDate, 30);
+        timeRange === "7d" ? subDays(endDate, 6) : subDays(endDate, 29);
 
       // Generate all days in the range
       const daysInRange = eachDayOfInterval({
         start: startDate,
         end: endDate,
       });
+
+      console.log(
+        `Date range for ${timeRange}: ${format(
+          startDate,
+          "yyyy-MM-dd"
+        )} to ${format(endDate, "yyyy-MM-dd")} (${daysInRange.length} days)`
+      );
 
       // Create a map of existing data points by date string
       const existingDataMap = new Map<string, SalesTrendPoint>();
@@ -218,7 +225,9 @@ export function ChartAreaInteractive() {
         };
       });
 
-      console.log(`Generated ${result.length} daily data points`);
+      console.log(
+        `Generated ${result.length} daily data points for ${timeRange}`
+      );
       return result;
     } else if (timeRange === "90d") {
       // Group by 10-day periods for 90 days
@@ -276,21 +285,18 @@ export function ChartAreaInteractive() {
 
       console.log(`Generated ${result.length} 10-day buckets for 90d view`);
       return result;
-    } else if (
-      timeRange === "180d" ||
-      timeRange === "this_month" ||
-      timeRange === "custom"
-    ) {
+    } else if (timeRange === "this_month" || timeRange === "custom") {
       // Monthly format for longer periods
-      const endDate = dateRange.to || new Date();
+      let endDate: Date;
       let startDate: Date;
 
-      if (timeRange === "180d") {
-        startDate = subMonths(endDate, 6);
-      } else if (timeRange === "this_month") {
-        startDate = startOfMonth(endDate);
+      if (timeRange === "this_month") {
+        const today = new Date();
+        startDate = startOfMonth(today);
+        endDate = endOfMonth(today); // Use end of month instead of today
       } else {
         // custom range
+        endDate = dateRange.to || new Date();
         startDate = dateRange.from || subMonths(endDate, 1);
       }
 
@@ -462,9 +468,6 @@ export function ChartAreaInteractive() {
               </SelectItem>
               <SelectItem value="90d" className="rounded-lg">
                 Last 90 days
-              </SelectItem>
-              <SelectItem value="180d" className="rounded-lg">
-                Last 6 months
               </SelectItem>
               <SelectItem value="this_month" className="rounded-lg">
                 This month

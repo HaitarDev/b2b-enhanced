@@ -2,9 +2,6 @@
  * Utility functions for calculating sales and revenue consistently across the application
  */
 
-import type { EnhancedOrder } from "@/hooks/use-orders-data";
-import type { ShopifyOrder } from "@/hooks/use-dashboard-data";
-
 /**
  * Count total sales by summing the quantities of all line items across all orders
  * This is the preferred method for counting sales, treating each item sold as a sale
@@ -41,9 +38,10 @@ export function countTotalSales<
 }
 
 /**
- * Calculate total revenue from orders, excluding refunded orders
+ * Calculate total revenue from ALL orders (including refunded ones)
+ * This represents the gross revenue before any refunds are considered
  * @param orders Array of orders to calculate revenue from
- * @returns Total revenue amount (excluding refunded orders)
+ * @returns Total revenue amount (including refunded orders)
  */
 export function calculateTotalRevenue<
   T extends {
@@ -58,8 +56,8 @@ export function calculateTotalRevenue<
   if (!orders || !Array.isArray(orders)) return 0;
 
   orders.forEach((order) => {
-    // Skip refunded or cancelled orders entirely when calculating revenue
-    if (order.status === "Refunded" || order.status === "Cancelled") {
+    // Skip cancelled orders only - include all other orders including refunded ones
+    if (order.status === "Cancelled") {
       return;
     }
 

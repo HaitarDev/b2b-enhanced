@@ -28,8 +28,14 @@ export function RecentOrders() {
   const { data, isLoading } = useDashboardData();
   const router = useRouter();
 
-  // Get the most recent 5 orders
-  const recentOrders = data?.orders.slice(0, 5) || [];
+  // Get the most recent 5 orders and sort them in descending order (most recent first)
+  const recentOrders =
+    data?.orders
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .slice(0, 5) || [];
 
   return (
     <Card className="mx-4 lg:mx-6">

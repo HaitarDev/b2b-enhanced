@@ -936,6 +936,54 @@ export default function AdminPayouts() {
                       </div>
                     </div>
 
+                    <div className="p-2 mt-4 bg-blue-50 text-blue-700 rounded-md text-sm">
+                      <div className="font-medium mb-1">Debug Information:</div>
+                      <div className="text-xs space-y-1">
+                        <div>
+                          Payout System Revenue:{" "}
+                          {formatCurrency(data.totalRevenue || 0, "GBP")}
+                        </div>
+                        <div>
+                          Payout System Commission:{" "}
+                          {formatCurrency(
+                            (data.totalRevenue || 0) * 0.3,
+                            "GBP"
+                          )}
+                        </div>
+                        {data.includedOrders && (
+                          <div>
+                            Orders Included: {data.includedOrders.length}
+                            {data.includedOrders.map(
+                              (order: any, idx: number) => (
+                                <div key={idx} className="ml-2">
+                                  • {order.orderName}:{" "}
+                                  {formatCurrency(order.amount || 0, "GBP")}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        )}
+                        {data.excludedOrders &&
+                          data.excludedOrders.length > 0 && (
+                            <div>
+                              Orders Excluded: {data.excludedOrders.length}
+                              {data.excludedOrders.map(
+                                (order: any, idx: number) => (
+                                  <div key={idx} className="ml-2">
+                                    • {order.orderName}:{" "}
+                                    {formatCurrency(
+                                      order.originalAmount || order.amount || 0,
+                                      "GBP"
+                                    )}{" "}
+                                    (Refunded)
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          )}
+                      </div>
+                    </div>
+
                     <div className="p-2 mt-4 bg-red-50 text-red-700 rounded-md text-sm">
                       Note: All refunded orders are completely excluded from
                       revenue calculations.

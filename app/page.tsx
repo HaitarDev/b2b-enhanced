@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import {
   ChevronRight,
   Menu,
@@ -15,6 +16,8 @@ import {
   Users,
   BarChart,
   Layers,
+  User,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,12 +30,24 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useTheme } from "next-themes";
 import { CookieConsent } from "@/components/cookie-consent";
+import { useAuth } from "@/hooks/use-auth";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { createClient } from "@/utils/supabase/client";
 
 export default function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { user, profile, isLoading, isAuthenticated } = useAuth();
+  const router = useRouter();
+  const supabase = createClient();
 
   useEffect(() => {
     setMounted(true);
@@ -47,6 +62,27 @@ export default function LandingPage() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Redirect authenticated users to their dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && profile) {
+      if (profile.role === "admin") {
+        router.push("/admin");
+      } else if (profile.role === "creator" && profile.approved) {
+        router.push("/dashboard");
+      }
+      // If creator is not approved, stay on landing page
+    }
+  }, [isLoading, isAuthenticated, profile, router]);
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      // No need to redirect, the auth state change will handle it
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
@@ -150,21 +186,85 @@ export default function LandingPage() {
             </Link>
           </nav>
           <div className="hidden md:flex gap-4 items-center">
-            <Link
-              href="/login"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Log in
-            </Link>
-            <Link href="/register">
-              <Button
-                size="sm"
-                className="rounded-full h-8 px-2.5 bg-black text-white hover:bg-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600"
-              >
-                Get Started
-                <ChevronRight className="ml-1 size-4" />
-              </Button>
-            </Link>
+            {isLoading ? (
+              // Loading state
+              <div className="flex items-center gap-4">
+                <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+                <div className="h-8 w-24 bg-muted animate-pulse rounded-full" />
+              </div>
+            ) : isAuthenticated && profile ? (
+              // Authenticated user dropdown
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="relative h-8 w-8 rounded-full"
+                  >
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage
+                        src={profile.avatar_url}
+                        alt={profile.name}
+                      />
+                      <AvatarFallback>
+                        {profile.name
+                          ? profile.name
+                              .split(" ")
+                              .map((n) => n.charAt(0))
+                              .join("")
+                              .toUpperCase()
+                              .slice(0, 2)
+                          : "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <div className="flex items-center justify-start gap-2 p-2">
+                    <div className="flex flex-col space-y-1 leading-none">
+                      <p className="font-medium">{profile.name}</p>
+                      <p className="w-[200px] truncate text-sm text-muted-foreground">
+                        {profile.email}
+                      </p>
+                    </div>
+                  </div>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (profile.role === "admin") {
+                        router.push("/admin");
+                      } else {
+                        router.push("/dashboard");
+                      }
+                    }}
+                  >
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Dashboard</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSignOut}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              // Not authenticated - show login/signup
+              <>
+                <Link
+                  href="/login"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Log in
+                </Link>
+                <Link href="/register">
+                  <Button
+                    size="sm"
+                    className="rounded-full h-8 px-2.5 bg-black text-white hover:bg-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600"
+                  >
+                    Get Started
+                    <ChevronRight className="ml-1 size-4" />
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-4 md:hidden">
             <Button
@@ -219,19 +319,87 @@ export default function LandingPage() {
                 FAQ
               </Link>
               <div className="flex flex-col gap-2 pt-2 border-t">
-                <Link
-                  href="/login"
-                  className="py-2 text-sm font-medium"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Log in
-                </Link>
-                <Link href="/register" onClick={() => setMobileMenuOpen(false)}>
-                  <Button className="rounded-full">
-                    Get Started
-                    <ChevronRight className="ml-1 size-4" />
-                  </Button>
-                </Link>
+                {isLoading ? (
+                  // Loading state
+                  <div className="flex flex-col gap-2">
+                    <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+                    <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+                  </div>
+                ) : isAuthenticated && profile ? (
+                  // Authenticated user options
+                  <>
+                    <div className="flex items-center gap-3 py-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage
+                          src={profile.avatar_url}
+                          alt={profile.name}
+                        />
+                        <AvatarFallback>
+                          {profile.name
+                            ? profile.name
+                                .split(" ")
+                                .map((n) => n.charAt(0))
+                                .join("")
+                                .toUpperCase()
+                                .slice(0, 2)
+                            : "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <p className="text-sm font-medium">{profile.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {profile.email}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="justify-start"
+                      onClick={() => {
+                        if (profile.role === "admin") {
+                          router.push("/admin");
+                        } else {
+                          router.push("/dashboard");
+                        }
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      <User className="mr-2 h-4 w-4" />
+                      Dashboard
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="justify-start"
+                      onClick={() => {
+                        handleSignOut();
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Log out
+                    </Button>
+                  </>
+                ) : (
+                  // Not authenticated - show login/signup
+                  <>
+                    <Link
+                      href="/login"
+                      className="py-2 text-sm font-medium"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Log in
+                    </Link>
+                    <Link
+                      href="/register"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Button className="rounded-full">
+                        Get Started
+                        <ChevronRight className="ml-1 size-4" />
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
@@ -250,32 +418,85 @@ export default function LandingPage() {
               transition={{ duration: 0.5 }}
               className="text-center max-w-3xl mx-auto mb-12"
             >
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
-                Work with Deinspar. Let's create together.
-              </h1>
-              <p className="text-sm md:text-base text-muted-foreground mb-8 max-w-2xl mx-auto">
-                We collaborate with artists who share their unique vision while
-                staying true to their art and values. Together, we create
-                timeless pieces that inspire and connect.
-              </p>
-              <div className="flex flex-row flex-wrap gap-2 justify-center sm:gap-4">
-                <Link href="/register">
-                  <Button
-                    size="lg"
-                    className="rounded-full h-10 px-6 text-sm sm:h-12 sm:px-8 sm:text-base"
-                  >
-                    Become a Creator
-                    <ArrowRight className="ml-2 size-4" />
-                  </Button>
-                </Link>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="rounded-full h-10 px-6 text-sm sm:h-12 sm:px-8 sm:text-base"
-                >
-                  Learn More
-                </Button>
-              </div>
+              {isAuthenticated && profile ? (
+                // Authenticated user content
+                <>
+                  <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+                    Welcome back, {profile.name}!
+                  </h1>
+                  <p className="text-sm md:text-base text-muted-foreground mb-8 max-w-2xl mx-auto">
+                    {profile.role === "admin"
+                      ? "Manage your platform and oversee all creator activities from your admin dashboard."
+                      : profile.approved
+                      ? "Continue creating amazing art and managing your portfolio from your dashboard."
+                      : "Your account is pending approval. We'll notify you once it's ready!"}
+                  </p>
+                  <div className="flex flex-row flex-wrap gap-2 justify-center sm:gap-4">
+                    {profile.approved || profile.role === "admin" ? (
+                      <Button
+                        size="lg"
+                        className="rounded-full h-10 px-6 text-sm sm:h-12 sm:px-8 sm:text-base"
+                        onClick={() => {
+                          if (profile.role === "admin") {
+                            router.push("/admin");
+                          } else {
+                            router.push("/dashboard");
+                          }
+                        }}
+                      >
+                        Go to Dashboard
+                        <ArrowRight className="ml-2 size-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        className="rounded-full h-10 px-6 text-sm sm:h-12 sm:px-8 sm:text-base"
+                        disabled
+                      >
+                        Pending Approval
+                      </Button>
+                    )}
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="rounded-full h-10 px-6 text-sm sm:h-12 sm:px-8 sm:text-base"
+                    >
+                      Learn More
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                // Non-authenticated user content
+                <>
+                  <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+                    Work with Deinspar. Let's create together.
+                  </h1>
+                  <p className="text-sm md:text-base text-muted-foreground mb-8 max-w-2xl mx-auto">
+                    We collaborate with artists who share their unique vision
+                    while staying true to their art and values. Together, we
+                    create timeless pieces that inspire and connect.
+                  </p>
+                  <div className="flex flex-row flex-wrap gap-2 justify-center sm:gap-4">
+                    <Link href="/register">
+                      <Button
+                        size="lg"
+                        className="rounded-full h-10 px-6 text-sm sm:h-12 sm:px-8 sm:text-base"
+                      >
+                        Become a Creator
+                        <ArrowRight className="ml-2 size-4" />
+                      </Button>
+                    </Link>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="rounded-full h-10 px-6 text-sm sm:h-12 sm:px-8 sm:text-base"
+                    >
+                      Learn More
+                    </Button>
+                  </div>
+                </>
+              )}
             </motion.div>
 
             <motion.div

@@ -101,6 +101,13 @@ const AdminDashboard = () => {
     return count !== null ? count : "--";
   };
 
+  const renderAmount = (amount: number | null) => {
+    if (isLoading || profileLoading || queryLoading) {
+      return <Skeleton className="h-8 w-20" />;
+    }
+    return amount !== null ? formatCurrency(amount) : "--";
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -151,29 +158,25 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {renderCount(data?.newTicketsCount ?? null)}
+              {renderCount(data?.unresolvedTicketsCount ?? null)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">New tickets</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Unresolved tickets
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
-              Payout Summary
+              Successful Payouts
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {isLoading || profileLoading || queryLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : (
-                formatCurrency(data?.totalPayouts ?? 0)
-              )}
+              {renderAmount(data?.totalSuccessfulPayouts ?? null)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Total paid to creators
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Total paid out</p>
           </CardContent>
         </Card>
       </div>

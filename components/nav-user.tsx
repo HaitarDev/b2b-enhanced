@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
 export interface UserData {
   id?: string;
@@ -43,6 +44,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar();
   const supabase = createClient();
+  const router = useRouter();
   // Loading state
   if (isLoading) {
     return (
@@ -111,17 +113,13 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  router.push("/dashboard/settings");
+                }}
+              >
                 <UserCircleIcon />
                 Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCardIcon />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <BellIcon />
-                Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

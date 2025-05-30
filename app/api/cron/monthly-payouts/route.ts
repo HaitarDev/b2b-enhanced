@@ -27,17 +27,25 @@ import {
 const getMonthDateRange = (dateString?: string) => {
   let date;
 
-  // If a date string is provided in format YYYY-MM, use it
-  if (dateString && /^\d{4}-\d{2}$/.test(dateString)) {
-    const [year, month] = dateString.split("-").map(Number);
-    date = new Date(year, month - 1); // Month is 0-indexed in JS Date
+  // If a date string is provided, parse it
+  if (dateString) {
+    if (/^\d{4}-\d{2}$/.test(dateString)) {
+      // Format: YYYY-MM
+      const [year, month] = dateString.split("-").map(Number);
+      date = new Date(year, month - 1); // Month is 0-indexed in JS Date
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      // Format: YYYY-MM-DD - use the month from this date
+      const inputDate = new Date(dateString);
+      date = new Date(inputDate.getFullYear(), inputDate.getMonth());
+    } else {
+      // Invalid format, use current month
+      date = new Date();
+    }
   } else {
     // Otherwise use previous month for cron job (current month for manual testing)
     date = new Date();
     // For automated cron job, use previous month
-    if (!dateString) {
-      date.setMonth(date.getMonth() - 1);
-    }
+    date.setMonth(date.getMonth() - 1);
   }
 
   const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -278,7 +286,11 @@ async function calculateProductRevenue(
         const responseData = response.body as ShopifyOrdersResponse;
 
         if (responseData.data?.orders?.edges) {
-          responseData.data.orders.edges.forEach(({ node: order }) => {
+          const allOrders = responseData.data.orders.edges;
+          const includedOrders: string[] = [];
+          const excludedOrders: string[] = [];
+
+          allOrders.forEach(({ node: order }) => {
             // Only count paid orders
             const status = order.displayFinancialStatus?.toUpperCase() || "";
 
@@ -317,10 +329,23 @@ async function calculateProductRevenue(
             if (
               status === "PAID" ||
               status === "PARTIALLY_PAID" ||
-              status === "PARTIALLY_REFUNDED" ||
               status.includes("PAID") ||
               status.includes("COMPLETE")
             ) {
+              // Skip orders that contain "REFUND" in their status
+              if (status.includes("REFUND")) {
+                console.log(
+                  `❌ EXCLUDING refunded order ${order.name} with status ${status}`
+                );
+                excludedOrders.push(`${order.name} (${status})`);
+                return;
+              }
+
+              console.log(
+                `✅ INCLUDING order ${order.name} with status ${status}`
+              );
+              includedOrders.push(`${order.name} (${status})`);
+
               // Filter line items for this product
               const lineItems = order.lineItems.edges
                 .map((edge) => edge.node)
@@ -506,6 +531,16 @@ async function calculateProductRevenue(
               console.log(`Skipping order ${order.name} with status ${status}`);
             }
           });
+
+          // Log summary of included vs excluded orders
+          console.log(
+            `\n=== ORDER PROCESSING SUMMARY FOR PRODUCT ${productId} ===`
+          );
+          console.log(`✅ INCLUDED ORDERS (${includedOrders.length}):`);
+          includedOrders.forEach((order) => console.log(`  - ${order}`));
+          console.log(`❌ EXCLUDED ORDERS (${excludedOrders.length}):`);
+          excludedOrders.forEach((order) => console.log(`  - ${order}`));
+          console.log(`=== END SUMMARY ===\n`);
         }
 
         // Check if there are more pages to fetch
@@ -724,7 +759,53 @@ export async function GET(request: Request) {
         console.log(`- ${p.title}: ${p.revenue.toFixed(2)} ${p.currency}`);
       });
 
-      // Creator gets 70% of total revenue (30% commission to platform)
+      // Debug: Show detailed revenue breakdown
+      console.log(`=== REVENUE BREAKDOWN FOR CREATOR ${creator.id} ===`);
+      console.log(`Period: ${firstDay} to ${lastDay}`);
+      console.log(
+        `Total Revenue: ${creatorTotalRevenue.toFixed(2)} ${mainCurrency}`
+      );
+      console.log(
+        `Expected Commission (30%): ${(creatorTotalRevenue * 0.3).toFixed(
+          2
+        )} ${mainCurrency}`
+      );
+
+      // Show product-by-product breakdown
+      productRevenueData.forEach((product) => {
+        if (product.revenue > 0) {
+          console.log(`Product: ${product.title}`);
+          console.log(
+            `  - Revenue: ${product.revenue.toFixed(2)} ${product.currency}`
+          );
+          console.log(`  - Sales: ${product.sales}`);
+          if (product.variants && product.variants.length > 0) {
+            product.variants.forEach((variant) => {
+              if (variant.totalRevenue > 0) {
+                console.log(
+                  `  - Variant "${variant.title}": ${
+                    variant.totalSold
+                  } sold, ${variant.totalRevenue.toFixed(2)} ${
+                    variant.currency
+                  }`
+                );
+                variant.orders.forEach((order) => {
+                  console.log(
+                    `    * Order ${order.orderName}: ${
+                      order.quantity
+                    }x @ ${order.pricePaid.toFixed(
+                      2
+                    )} = ${order.lineTotal.toFixed(2)}`
+                  );
+                });
+              }
+            });
+          }
+        }
+      });
+      console.log(`=== END BREAKDOWN ===`);
+
+      // Creator gets 30% of total revenue (commission to creator)
       const creatorCommission = creatorTotalRevenue * 0.3;
 
       console.log(
@@ -756,7 +837,7 @@ export async function GET(request: Request) {
           creator.name || creator.id
         }: Total revenue (excl. shipping): ${creatorTotalRevenue.toFixed(
           2
-        )} ${mainCurrency}, Creator commission (70%): ${creatorCommission.toFixed(
+        )} ${mainCurrency}, Creator commission (30%): ${creatorCommission.toFixed(
           2
         )} ${mainCurrency}`
       );

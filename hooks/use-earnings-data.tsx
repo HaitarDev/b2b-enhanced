@@ -444,7 +444,6 @@ export function useEarningsData(
           "7days": "7d",
           "30days": "30d",
           "90days": "90d",
-          "6months": "180d",
           "this-month": "this_month",
           custom: "custom",
         };

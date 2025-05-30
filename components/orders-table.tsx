@@ -28,10 +28,6 @@ import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  DateRangeFilter,
-  type DateRange,
-} from "@/components/date-range-filter";
-import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -57,15 +53,16 @@ import {
 } from "@/components/ui/table";
 
 // Import the utility function for consistent counting
-import {
-  countTotalSales,
-  calculateTotalRevenue,
-  calculateTotalRefunds,
-  calculateNetRevenue,
-} from "@/utils/sales-helpers";
+import { countTotalSales } from "@/utils/sales-helpers";
 
 // Import the formatCurrency function from lib/utils
 import { formatCurrency } from "@/lib/utils";
+
+import {
+  OrdersDateRangePicker,
+  type OrdersDateRange,
+} from "@/components/orders-date-range-picker";
+import { DashboardFilter } from "@/hooks/use-dashboard-data";
 
 // Define the schema for order data
 export const orderSchema = z.object({
@@ -494,7 +491,7 @@ const columns: ColumnDef<Order>[] = [
   },
   {
     accessorKey: "total",
-    header: "Amount",
+    header: () => <div className="text-right">Amount</div>,
     cell: ({ row }: { row: Row<Order> }) => {
       const order = row.original;
       return (
@@ -512,7 +509,7 @@ const columns: ColumnDef<Order>[] = [
           )}
           {order.shippingAmount > 0 && (
             <div className="text-xs text-muted-foreground">
-              Inc. {formatCurrency(order.shippingAmount)} shipping
+              {formatCurrency(order.shippingAmount)} shipping
             </div>
           )}
         </div>
@@ -521,7 +518,7 @@ const columns: ColumnDef<Order>[] = [
   },
   {
     accessorKey: "refundAmount",
-    header: "Refund",
+    header: () => <div className="text-right">Refund</div>,
     cell: ({ row }: { row: Row<Order> }) => {
       const amount = parseFloat(row.getValue("refundAmount") as string) || 0;
 
@@ -536,7 +533,7 @@ const columns: ColumnDef<Order>[] = [
   },
   {
     accessorKey: "shippingAmount",
-    header: "Shipping",
+    header: () => <div className="text-right">Shipping</div>,
     cell: ({ row }: { row: Row<Order> }) => {
       const amount = parseFloat(row.getValue("shippingAmount") as string) || 0;
 
@@ -549,7 +546,7 @@ const columns: ColumnDef<Order>[] = [
   },
   {
     accessorKey: "netRevenue",
-    header: "Net Revenue",
+    header: () => <div className="text-right">Net Revenue</div>,
     cell: ({ row }: { row: Row<Order> }) => {
       const amount = parseFloat(row.getValue("netRevenue") as string) || 0;
 
@@ -583,9 +580,7 @@ const columns: ColumnDef<Order>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }: { row: Row<Order> }) => {
-      const order = row.original;
-
+    cell: () => {
       return (
         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
           <span className="sr-only">Open order details</span>
@@ -611,11 +606,9 @@ interface OrdersTableProps {
     netRevenue: number;
     totalSales: number;
   };
-  onDateRangeChange?: (range: DateRange) => void;
   onTimeRangeChange?: (timeRange: string) => void;
-  currentDateRange?: DateRange;
+  onRangeChange?: (range: OrdersDateRange) => void;
   currentTimeRange?: string;
-  isStandalone?: boolean;
 }
 
 export function OrdersTable({
@@ -623,11 +616,9 @@ export function OrdersTable({
   isLoading = false,
   isRefreshing = false,
   orderStats,
-  onDateRangeChange,
   onTimeRangeChange,
-  currentDateRange,
+  onRangeChange,
   currentTimeRange = "this_month",
-  isStandalone = false,
 }: OrdersTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "date", desc: true },
@@ -647,21 +638,7 @@ export function OrdersTable({
   const [selectedTimeRange, setSelectedTimeRange] =
     React.useState<string>(currentTimeRange);
 
-  // Initialize dateRange from props if available
-  const [dateRange, setDateRange] = React.useState<DateRange>(
-    currentDateRange || {
-      from: undefined,
-      to: undefined,
-    }
-  );
-
   // Update state when props change
-  React.useEffect(() => {
-    if (currentDateRange) {
-      setDateRange(currentDateRange);
-    }
-  }, [currentDateRange]);
-
   React.useEffect(() => {
     if (currentTimeRange) {
       setSelectedTimeRange(currentTimeRange);
@@ -715,17 +692,6 @@ export function OrdersTable({
     getSortedRowModel: getSortedRowModel(),
   });
 
-  // Handle date range change
-  const handleDateRangeChange = React.useCallback(
-    (range: DateRange) => {
-      setDateRange(range);
-      if (onDateRangeChange) {
-        onDateRangeChange(range);
-      }
-    },
-    [onDateRangeChange]
-  );
-
   // Handle time range selection
   const handleTimeRangeChange = React.useCallback(
     (value: string) => {
@@ -771,30 +737,22 @@ export function OrdersTable({
             </SelectContent>
           </Select>
 
-          <Select
-            value={selectedTimeRange}
-            onValueChange={handleTimeRangeChange}
-          >
-            <SelectTrigger className="w-[130px]">
-              <SelectValue placeholder="Time Range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="this_month">This Month</SelectItem>
-              <SelectItem value="7d">Last 7 Days</SelectItem>
-              <SelectItem value="30d">Last 30 Days</SelectItem>
-              <SelectItem value="90d">Last 90 Days</SelectItem>
-              <SelectItem value="180d">Last 6 Months</SelectItem>
-            </SelectContent>
-          </Select>
+          <OrdersDateRangePicker
+            currentTimeRange={selectedTimeRange as DashboardFilter}
+            onTimeRangeChange={(timeRange) => handleTimeRangeChange(timeRange)}
+            onRangeChange={(range) => {
+              // Handle custom date range changes
+              console.log("Date range changed:", range);
+              if (onRangeChange) {
+                onRangeChange(range);
+              }
+            }}
+          />
         </div>
       </div>
 
       {orderStats && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6 mb-4">
-          <div className="rounded-lg border p-3">
-            <div className="text-sm text-muted-foreground">Total Orders</div>
-            <div className="text-2xl font-bold">{orderStats.totalOrders}</div>
-          </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-4">
           <div className="rounded-lg border p-3">
             <div className="text-sm text-muted-foreground">Total Sales</div>
             <div className="text-2xl font-bold">
@@ -807,26 +765,16 @@ export function OrdersTable({
             <div className="text-2xl font-bold">
               {formatCurrency(orderStats.totalRevenue)}
             </div>
+            <div className="text-xs text-muted-foreground">Gross revenue</div>
           </div>
           <div className="rounded-lg border p-3">
-            <div className="text-sm text-muted-foreground">
-              {orderStats.totalRefunds > 0 ? "Net Revenue" : "Average Order"}
-            </div>
+            <div className="text-sm text-muted-foreground">Net Revenue</div>
             <div className="text-2xl font-bold">
-              {!isLoading
-                ? formatCurrency(
-                    orderStats.netRevenue || orderStats.totalRevenue
-                  )
-                : formatCurrency(orderStats.averageOrderValue)}
+              {formatCurrency(orderStats.netRevenue)}
             </div>
-            {orderStats.totalRefunds > 0 && (
-              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                <span className="text-destructive font-medium">
-                  After refunds
-                </span>
-                <span className="text-muted-foreground">(Total - Refunds)</span>
-              </div>
-            )}
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="text-muted-foreground">After refunds</span>
+            </div>
           </div>
           <div className="rounded-lg border p-3">
             <div className="text-sm text-muted-foreground">Paid Orders</div>

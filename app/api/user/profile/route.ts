@@ -47,7 +47,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { bio, instagram, portfolio, currency } = body;
+    const { name, bio, instagram, portfolio, currency } = body;
 
     const supabase = await createClient();
 
@@ -66,6 +66,7 @@ export async function PATCH(request: Request) {
     // Prepare update data (only include fields that are provided)
     const updateData: Record<string, unknown> = {};
 
+    if (name !== undefined) updateData.name = name;
     if (bio !== undefined) updateData.bio = bio;
     if (instagram !== undefined) updateData.instagram = instagram;
     if (portfolio !== undefined) updateData.portfolio = portfolio;
@@ -75,7 +76,8 @@ export async function PATCH(request: Request) {
     updateData.updated_at = new Date().toISOString();
 
     // No fields to update
-    if (Object.keys(updateData).length === 0) {
+    if (Object.keys(updateData).length === 1) {
+      // Only updated_at
       return NextResponse.json(
         { error: "No valid fields to update" },
         { status: 400 }

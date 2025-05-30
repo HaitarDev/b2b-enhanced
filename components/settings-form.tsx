@@ -126,6 +126,7 @@ export function SettingsForm() {
   // Profile update mutation
   const updateProfileMutation = useMutation({
     mutationFn: async (data: {
+      name: string;
       bio: string;
       instagram: string;
       currency: string;
@@ -199,6 +200,7 @@ export function SettingsForm() {
   // Form submission handler
   function onSubmit(data: SettingsFormValues) {
     updateProfileMutation.mutateAsync({
+      name: data.name,
       bio: data.bio || "",
       instagram: data.instagramLink || "",
       currency: data.currency,
@@ -351,11 +353,10 @@ export function SettingsForm() {
                     <FormItem>
                       <FormLabel>Name</FormLabel>
                       <FormControl>
-                        <Input {...field} readOnly className="bg-muted/50" />
+                        <Input {...field} />
                       </FormControl>
                       <FormDescription>
-                        Your name as it appears on your account. This cannot be
-                        changed.
+                        Your display name as it appears on your account.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -365,6 +366,7 @@ export function SettingsForm() {
                 <FormField
                   control={form.control}
                   name="email"
+                  disabled={true}
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email</FormLabel>
@@ -419,37 +421,6 @@ export function SettingsForm() {
                       </FormControl>
                       <FormDescription>
                         Link to your Instagram profile. (Optional)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="currency"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Preferred Currency</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select your preferred currency" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="GBP">British Pound (£)</SelectItem>
-                          <SelectItem value="EUR">Euro (€)</SelectItem>
-                          <SelectItem value="USD">US Dollar ($)</SelectItem>
-                          <SelectItem value="DKK">Danish Krone (kr)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        All earnings and prices will be displayed in your
-                        preferred currency.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

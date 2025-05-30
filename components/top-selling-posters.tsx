@@ -33,8 +33,10 @@ export function TopSellingPosters() {
     posters: data?.topSellingPosters,
   });
 
-  // Ensure we have a valid array of posters
-  const posters = data?.topSellingPosters || [];
+  // Ensure we have a valid array of posters and filter out those with 0 sales
+  const posters = (data?.topSellingPosters || []).filter(
+    (poster) => poster.sales > 0
+  );
 
   // Handle date range changes
   const handleDateRangeChange = (

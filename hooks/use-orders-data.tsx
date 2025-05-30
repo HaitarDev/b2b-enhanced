@@ -7,14 +7,7 @@ import {
   ShopifyOrder,
   DashboardFilter,
 } from "@/hooks/use-dashboard-data";
-import {
-  isWithinInterval,
-  parseISO,
-  subDays,
-  subMonths,
-  addDays,
-} from "date-fns";
-import { createClient } from "@/utils/supabase/client";
+import { subDays } from "date-fns";
 import {
   countTotalSales,
   calculateTotalRevenue,
@@ -85,72 +78,6 @@ export function useOrdersData() {
     setTimeRange,
     setCustomDateRange,
   } = useDashboardData();
-
-  // Track whether we've already done a 6-month refetch to prevent loops
-  const sixMonthRefetchDone = React.useRef(false);
-
-  // Track consecutive throttling errors to provide fallback data
-  const throttlingErrors = React.useRef(0);
-
-  // Cache for 6-month data to ensure consistent results
-  const sixMonthDataCache = React.useRef<{
-    orders: EnhancedOrder[];
-    stats: OrderStats;
-    timestamp: number;
-  } | null>(null);
-
-  // Fix for 6-month data: explicitly refetch when timeRange is set to 180d
-  // but only do it once to prevent loops
-  React.useEffect(() => {
-    if (timeRange === "180d" && !sixMonthRefetchDone.current && dashboardData) {
-      console.log("Initiating one-time refetch for 6-month data");
-      sixMonthRefetchDone.current = true;
-
-      // Check if we have cached data that's less than 30 minutes old
-      const currentTime = Date.now();
-      if (
-        sixMonthDataCache.current &&
-        currentTime - sixMonthDataCache.current.timestamp < 30 * 60 * 1000
-      ) {
-        console.log("Using cached 6-month data to prevent API throttling");
-        return;
-      }
-
-      // Generate appropriate date range for full 6 months
-      const currentDate = new Date();
-      const sixMonthsAgo = subMonths(currentDate, 6);
-
-      // Update date range with more precise range
-      setDateRange({
-        from: sixMonthsAgo,
-        to: currentDate,
-      } as any);
-
-      // Also update custom date range for API calls
-      setCustomDateRange({
-        startDate: sixMonthsAgo.toISOString().split("T")[0],
-        endDate: currentDate.toISOString().split("T")[0],
-      });
-
-      // Force refetch with new parameters - use a longer timeout to avoid race conditions
-      setTimeout(() => {
-        refetchDashboard();
-      }, 200);
-    }
-  }, [
-    timeRange,
-    dashboardData,
-    refetchDashboard,
-    setDateRange,
-    setCustomDateRange,
-  ]);
-
-  // Reset the ref when timeRange changes away from 180d
-  React.useEffect(() => {
-    if (timeRange !== "180d") {
-      sixMonthRefetchDone.current = false;
-    }
-  }, [timeRange]);
 
   // Transform Shopify orders to our enhanced Order format
   const transformOrders = (
@@ -327,8 +254,6 @@ export function useOrdersData() {
   const filterOrdersByTimeRange = (
     orders: EnhancedOrder[]
   ): EnhancedOrder[] => {
-    if (!orders.length) return [];
-
     // If no date range is provided, return all orders
     if (!dateRange.from && !dateRange.to) return orders;
 
@@ -336,40 +261,6 @@ export function useOrdersData() {
       `Filtering orders from ${dateRange.from?.toISOString()} to ${dateRange.to?.toISOString()}`
     );
     console.log(`Initial orders count: ${orders.length}`);
-
-    // Special handling for 6-month data - use a more lenient filter
-    if (timeRange === "180d") {
-      // For 6-month data, we want to be more inclusive with dates
-      // Add a buffer of a few days on each end to catch edge cases
-      const fromDate = dateRange.from
-        ? new Date(
-            new Date(dateRange.from).setDate(dateRange.from.getDate() - 5)
-          )
-        : undefined;
-
-      const toDate = dateRange.to
-        ? new Date(new Date(dateRange.to).setDate(dateRange.to.getDate() + 5))
-        : undefined;
-
-      if (fromDate) fromDate.setHours(0, 0, 0, 0);
-      if (toDate) toDate.setHours(23, 59, 59, 999);
-
-      console.log(`Using extended range for 6-month data: 
-        from: ${fromDate?.toISOString()} 
-        to: ${toDate?.toISOString()}`);
-
-      const filtered = orders.filter((order) => {
-        if (!fromDate || !toDate) return true;
-
-        const orderDate = new Date(order.date);
-        const isInRange = orderDate >= fromDate && orderDate <= toDate;
-
-        return isInRange;
-      });
-
-      console.log(`Filtered orders for 6-month data: ${filtered.length}`);
-      return filtered;
-    }
 
     // Special handling for this_month data to ensure we get all orders in the current month
     if (timeRange === "this_month") {
@@ -503,30 +394,6 @@ export function useOrdersData() {
         `Date range: ${dateRange.from?.toISOString()} to ${dateRange.to?.toISOString()}`
       );
 
-      // Check if we should use cached data for 6-month view to prevent API throttling
-      if (timeRange === "180d" && sixMonthDataCache.current) {
-        const cacheAge = Date.now() - sixMonthDataCache.current.timestamp;
-        const cacheMaxAge = 30 * 60 * 1000; // 30 minutes
-
-        if (cacheAge < cacheMaxAge) {
-          console.log(
-            `Using cached 6-month data (${Math.round(
-              cacheAge / 60000
-            )} minutes old)`
-          );
-          return sixMonthDataCache.current;
-        } else {
-          console.log("6-month cache expired, fetching fresh data");
-        }
-      }
-
-      // Special handling for 6-month data
-      if (timeRange === "180d") {
-        console.log(
-          "Fetching full 6-month data set with expanded query parameters"
-        );
-      }
-
       // Use the dashboard data which already contains the Shopify orders
       if (dashboardData?.orders) {
         console.log(
@@ -562,80 +429,6 @@ export function useOrdersData() {
         const filteredOrders = filterOrdersByTimeRange(transformedOrders);
         const stats = calculateOrderStats(filteredOrders);
 
-        // For 6-month data, validate and potentially expand the results
-        if (timeRange === "180d") {
-          // If we got a reasonable number of orders, cache the result
-          if (filteredOrders.length >= 3) {
-            console.log(
-              `Caching 6-month data with ${filteredOrders.length} orders`
-            );
-            sixMonthDataCache.current = {
-              orders: filteredOrders,
-              stats,
-              timestamp: Date.now(),
-            };
-          }
-
-          // If we have very few orders but there should be more, use the expanded filtering
-          // technique to find more orders
-          if (filteredOrders.length < 3 && transformedOrders.length > 5) {
-            console.warn(
-              "Unusually few orders for 6-month range. Expanding date range significantly."
-            );
-
-            // Try with a much more expanded date range (add days at each end)
-            const expandedFrom = dateRange.from
-              ? new Date(
-                  new Date(dateRange.from).setDate(
-                    dateRange.from.getDate() - 10
-                  )
-                )
-              : undefined;
-
-            const expandedTo = dateRange.to
-              ? new Date(
-                  new Date(dateRange.to).setDate(dateRange.to.getDate() + 10)
-                )
-              : undefined;
-
-            console.log(
-              `Expanded date range: ${expandedFrom?.toISOString()} to ${expandedTo?.toISOString()}`
-            );
-
-            // Filter with expanded date range
-            const expandedFilteredOrders = transformedOrders.filter((order) => {
-              if (!expandedFrom || !expandedTo) return true;
-
-              const fromDate = new Date(expandedFrom);
-              fromDate.setHours(0, 0, 0, 0);
-
-              const toDate = new Date(expandedTo);
-              toDate.setHours(23, 59, 59, 999);
-
-              const orderDate = new Date(order.date);
-              return orderDate >= fromDate && orderDate <= toDate;
-            });
-
-            console.log(
-              `Expanded filtered orders count: ${expandedFilteredOrders.length}`
-            );
-
-            if (expandedFilteredOrders.length > filteredOrders.length) {
-              console.log("Using expanded date range for better 6-month data");
-              const expandedStats = calculateOrderStats(expandedFilteredOrders);
-
-              // Cache this improved result
-              sixMonthDataCache.current = {
-                orders: expandedFilteredOrders,
-                stats: expandedStats,
-                timestamp: Date.now(),
-              };
-
-              return { orders: expandedFilteredOrders, stats: expandedStats };
-            }
-          }
-        }
-
         // Check if our calculations are consistent with dashboard
         if (dashboardData.stats) {
           console.log("OrdersPage stats vs Dashboard stats:", {
@@ -648,31 +441,10 @@ export function useOrdersData() {
           });
         }
 
-        // Cache 6-month data to provide consistency
-        if (timeRange === "180d") {
-          sixMonthDataCache.current = {
-            orders: filteredOrders,
-            stats,
-            timestamp: Date.now(),
-          };
-        }
-
         return { orders: filteredOrders, stats };
       }
 
       // If dashboard data is not available, fetch it directly
-      // Create date parameters for API call
-      let startDate: string | undefined;
-      let endDate: string | undefined;
-
-      if (dateRange.from) {
-        startDate = dateRange.from.toISOString().split("T")[0];
-      }
-
-      if (dateRange.to) {
-        endDate = dateRange.to.toISOString().split("T")[0];
-      }
-
       // Construct URL with query parameters
       let url = "/api/dashboard/stats";
       if (dateRange.from && dateRange.to) {
@@ -717,37 +489,14 @@ export function useOrdersData() {
         const filteredOrders = filterOrdersByTimeRange(transformedOrders);
         const stats = calculateOrderStats(filteredOrders);
 
-        // Cache 6-month data
-        if (timeRange === "180d") {
-          sixMonthDataCache.current = {
-            orders: filteredOrders,
-            stats,
-            timestamp: Date.now(),
-          };
-        }
-
         return { orders: filteredOrders, stats };
       } catch (error) {
         console.error("Error fetching orders:", error);
-
-        // If we're getting throttling errors and have cached 6-month data, use it
-        if (
-          timeRange === "180d" &&
-          sixMonthDataCache.current &&
-          error instanceof Error &&
-          (error.message.includes("Throttled") ||
-            error.message.includes("rate limit"))
-        ) {
-          console.log("Using cached data due to API throttling");
-          throttlingErrors.current += 1;
-          return sixMonthDataCache.current;
-        }
-
         return { orders: [], stats: calculateOrderStats([]) };
       }
     },
     enabled: !isDashboardLoading || !dashboardData,
-    staleTime: timeRange === "180d" ? 30 * 60 * 1000 : 5 * 60 * 1000, // 30 minutes for 6-month data, 5 minutes for others
+    staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 3, // Retry up to 3 times for more reliable data
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff with max 30s
   });
@@ -761,6 +510,7 @@ export function useOrdersData() {
     setDateRange({
       from: newRange.from || undefined,
       to: newRange.to || undefined,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     if (newRange.from && newRange.to) {
@@ -776,14 +526,6 @@ export function useOrdersData() {
 
   // Handle time range changes
   const handleTimeRangeChange = (newTimeRange: DashboardFilter) => {
-    // Reset the 6-month refetch tracker when changing time ranges
-    if (newTimeRange !== timeRange) {
-      sixMonthRefetchDone.current = false;
-
-      // Reset throttling errors counter when switching time ranges
-      throttlingErrors.current = 0;
-    }
-
     setTimeRange(newTimeRange);
 
     // For "custom" time range, we rely on the date picker to set the dates
@@ -799,14 +541,6 @@ export function useOrdersData() {
         from = subDays(now, 30);
       } else if (newTimeRange === "90d") {
         from = subDays(now, 90);
-      } else if (newTimeRange === "180d") {
-        // Use subMonths for 6 months instead of subDays to get accurate 6 months
-        from = subMonths(now, 6);
-        // Set hours to beginning of day for more inclusive range
-        from.setHours(0, 0, 0, 0);
-        // Set end date to end of current day for more inclusive range
-        to = new Date(now);
-        to.setHours(23, 59, 59, 999);
       } else if (newTimeRange === "this_month") {
         // Ensure "this_month" always starts from the 1st day of the current month
         from = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -814,7 +548,7 @@ export function useOrdersData() {
         to = now; // Up to today
         to.setHours(23, 59, 59, 999); // End of current day
       } else {
-        // For "all" time range
+        // Default fallback
         from = undefined;
         to = undefined;
       }
@@ -823,6 +557,7 @@ export function useOrdersData() {
       setDateRange({
         from: from || undefined,
         to: to || undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
 
       // Also update custom date range for API calls if needed
@@ -836,20 +571,12 @@ export function useOrdersData() {
       }
     }
 
-    // Don't trigger a second refetch immediately for 6-month view to prevent loops
-    if (newTimeRange !== "180d" || !sixMonthRefetchDone.current) {
-      refetchOrders();
-    }
+    // Refetch orders with new time range
+    refetchOrders();
   };
 
   // Set initial time range on component mount
   const setInitialTimeRange = (initialTimeRange: DashboardFilter) => {
-    // Reset the 6-month refetch tracker
-    sixMonthRefetchDone.current = false;
-
-    // Reset throttling errors counter when setting initial time range
-    throttlingErrors.current = 0;
-
     // Set the time range and trigger the date change to match
     setTimeRange(initialTimeRange);
 
@@ -864,8 +591,6 @@ export function useOrdersData() {
       from = subDays(now, 30);
     } else if (initialTimeRange === "90d") {
       from = subDays(now, 90);
-    } else if (initialTimeRange === "180d") {
-      from = subMonths(now, 6);
     } else if (initialTimeRange === "this_month") {
       // Ensure "this_month" always starts from the 1st day of the current month
       from = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -873,7 +598,7 @@ export function useOrdersData() {
       to = new Date(now); // Up to today
       to.setHours(23, 59, 59, 999); // End of current day
     } else {
-      // For "all" time range
+      // Default fallback
       from = undefined;
       to = undefined;
     }
@@ -882,6 +607,7 @@ export function useOrdersData() {
     setDateRange({
       from: from || undefined,
       to: to || undefined,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     // Also update custom date range for API calls if needed

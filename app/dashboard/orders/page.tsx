@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeaderDashboard } from "@/components/site-header-dashboard";
 import { useOrdersData } from "@/hooks/use-orders-data";
 import { DashboardFilter } from "@/hooks/use-dashboard-data";
+import { OrdersDateRange } from "@/components/orders-date-range-picker";
 import { Icons } from "@/components/icons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { createClient } from "@/utils/supabase/client";
@@ -16,11 +17,10 @@ export default function OrdersPage() {
     orders,
     stats,
     isLoading,
-    error,
     dateRange,
     timeRange,
-    handleDateRangeChange,
     handleTimeRangeChange,
+    handleDateRangeChange,
     refetch,
     setInitialTimeRange,
   } = useOrdersData();
@@ -137,9 +137,9 @@ export default function OrdersPage() {
                     <Icons.info className="h-4 w-4" />
                     <AlertTitle>No approved products</AlertTitle>
                     <AlertDescription>
-                      You don't have any approved products yet. Once your
-                      products are approved, you'll be able to see orders and
-                      revenue data here.
+                      You don&apos;t have any approved products yet. Once your
+                      products are approved, you&apos;ll be able to see orders
+                      and revenue data here.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -148,9 +148,8 @@ export default function OrdersPage() {
                 orders={orders}
                 isLoading={isLoading || loadingApprovedProducts}
                 orderStats={stats}
-                onDateRangeChange={handleDateRangeChange}
                 onTimeRangeChange={handleTimeRangeChangeWithCasting}
-                currentDateRange={dateRange}
+                onRangeChange={handleDateRangeChange}
                 currentTimeRange={timeRange}
               />
             </div>

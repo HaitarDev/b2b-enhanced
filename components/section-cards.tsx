@@ -33,6 +33,7 @@ import { useState, useEffect } from "react";
 import { DateRange as DateRangeType } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { CurrencyDisplay } from "./currency-display";
+import { useCurrencyContext } from "./currency-provider";
 
 export function SectionCards() {
   const {
@@ -45,6 +46,8 @@ export function SectionCards() {
     dateRange,
     setDateRange,
   } = useDashboardData();
+
+  const { userCurrency, version } = useCurrencyContext();
 
   const handleDateRangeSelect = (range: DateRangeType | undefined) => {
     if (range?.from && range.to) {
@@ -226,6 +229,7 @@ export function SectionCards() {
               <Skeleton className="h-8 w-24" />
             ) : (
               <CurrencyDisplay
+                key={`total-revenue-${userCurrency}-${version}`}
                 amount={
                   data?.stats?.netRevenue !== undefined
                     ? data.stats.netRevenue
@@ -258,6 +262,7 @@ export function SectionCards() {
               <Skeleton className="h-8 w-24" />
             ) : (
               <CurrencyDisplay
+                key={`your-earnings-${userCurrency}-${version}`}
                 amount={
                   data?.stats?.totalRefunds && data.stats.totalRefunds > 0
                     ? (data.stats?.netRevenue || 0) * 0.3

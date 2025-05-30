@@ -50,36 +50,45 @@ export async function GET() {
     console.log({ pendingCreatorsCount, pendingError });
     if (pendingError) throw pendingError;
 
-    // Fetch new support tickets count
-    const { count: newTicketsCount, error: ticketsError } = await supabase
-      .from("support_messages")
-      .select("*", { count: "exact", head: true })
-      .order("created_at", { ascending: false });
-    console.log({ newTicketsCount, ticketsError });
+    // Fetch unresolved support tickets count (not solved)
+    const { count: unresolvedTicketsCount, error: ticketsError } =
+      await supabase
+        .from("support_messages")
+        .select("*", { count: "exact", head: true })
+        .neq("status", "solved")
+        .order("created_at", { ascending: false });
+    console.log({ unresolvedTicketsCount, ticketsError });
     if (ticketsError) throw ticketsError;
 
-    // Calculate total payouts by summing the amount field from the payouts table
-    const { data: payoutsData, error: payoutsError } = await supabase
+    // Calculate total amount of successful payouts (completed status)
+    const { data: successfulPayoutsData, error: payoutsError } = await supabase
       .from("payout")
-      .select("amount");
+      .select("amount")
+      .eq("status", "completed");
 
     if (payoutsError) {
-      console.error("Error fetching payouts:", payoutsError);
+      console.error("Error fetching successful payouts:", payoutsError);
       throw payoutsError;
     }
 
-    // Sum up all payout amounts
-    const totalPayouts = payoutsData.reduce((total, payout) => {
-      return total + (parseFloat(payout.amount) || 0);
-    }, 0);
+    // Sum up all successful payout amounts
+    const totalSuccessfulPayouts = successfulPayoutsData.reduce(
+      (total, payout) => {
+        return total + (parseFloat(payout.amount) || 0);
+      },
+      0
+    );
 
-    console.log({ totalPayouts, payoutsCount: payoutsData.length });
+    console.log({
+      totalSuccessfulPayouts,
+      successfulPayoutsCount: successfulPayoutsData.length,
+    });
 
     return NextResponse.json({
       approvedCreatorsCount,
       pendingCreatorsCount,
-      newTicketsCount,
-      totalPayouts,
+      unresolvedTicketsCount,
+      totalSuccessfulPayouts,
     });
   } catch (error) {
     console.error("Error fetching dashboard data:", error);

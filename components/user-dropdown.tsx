@@ -14,6 +14,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -38,6 +39,7 @@ import { UserData } from "./nav-user";
 import { Skeleton } from "./ui/skeleton";
 import { useCurrency } from "@/hooks/use-currency";
 import { SupportedCurrency } from "@/lib/currency";
+import { eventBus, APP_EVENTS } from "@/lib/events";
 
 interface UserDropdownProps {
   user: UserData;
@@ -52,6 +54,18 @@ export function UserDropdown({ user, isLoading = false }: UserDropdownProps) {
   } = useCurrency();
   const supabase = createClient();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [isUpdatingCurrency, setIsUpdatingCurrency] = React.useState(false);
+  const [selectedCurrency, setSelectedCurrency] =
+    React.useState<SupportedCurrency | null>(null);
+  const lastEmittedCurrencyRef = React.useRef<SupportedCurrency | null>(null);
+
+  // Update selected currency when userCurrency changes
+  React.useEffect(() => {
+    if (userCurrency) {
+      setSelectedCurrency(userCurrency);
+    }
+  }, [userCurrency]);
 
   const handleSignOut = async () => {
     try {
@@ -65,11 +79,77 @@ export function UserDropdown({ user, isLoading = false }: UserDropdownProps) {
   };
 
   const handleCurrencyChange = async (value: string) => {
-    const success = await setUserCurrency(value as SupportedCurrency);
-    if (success) {
-      toast.success(`Currency updated to ${value}`);
-    } else {
-      toast.error("Failed to update currency");
+    // Prevent multiple clicks from processing
+    if (isUpdatingCurrency) return;
+
+    // Skip if same currency
+    if (value === userCurrency) return;
+
+    const newCurrency = value as SupportedCurrency;
+
+    try {
+      setIsUpdatingCurrency(true);
+
+      // Update local state immediately
+      setSelectedCurrency(newCurrency);
+
+      // Only emit the event if we haven't recently emitted for this currency
+      // This helps prevent recursion and unnecessary updates
+      if (lastEmittedCurrencyRef.current !== newCurrency) {
+        lastEmittedCurrencyRef.current = newCurrency;
+
+        // IMPORTANT: Broadcast currency change event FIRST
+        // This lets components start updating before the API call
+        eventBus.emit(APP_EVENTS.CURRENCY_CHANGED, newCurrency);
+
+        // Don't invalidate all dashboard queries, we only want to update the currency display
+        // queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+
+        // Don't force refetch all data - we only want to update the currency display
+        // queryClient.refetchQueries({ queryKey: ["dashboard"] });
+      }
+
+      // Show immediate toast
+      toast.success(`Updating currency to ${value}...`);
+
+      // Update the currency in the system (could take time)
+      const success = await setUserCurrency(newCurrency);
+
+      if (success) {
+        // This is already done, but ensure it's consistent
+        if (selectedCurrency !== newCurrency) {
+          setSelectedCurrency(newCurrency);
+        }
+
+        // Second toast - optional, could be removed
+        toast.success(`Currency updated to ${value}`);
+
+        // Only invalidate currency-specific queries, not all dashboard data
+        queryClient.invalidateQueries({ queryKey: ["userCurrency"] });
+      } else {
+        // On failure, revert to previous currency
+        setSelectedCurrency(userCurrency);
+        toast.error("Failed to update currency");
+
+        // Reset the last emitted currency reference on failure
+        lastEmittedCurrencyRef.current = userCurrency;
+
+        // Emit the original currency to fix any components that changed
+        eventBus.emit(APP_EVENTS.CURRENCY_CHANGED, userCurrency);
+      }
+    } finally {
+      // Reset the last emitted currency after a short delay
+      setTimeout(() => {
+        lastEmittedCurrencyRef.current = null;
+      }, 500);
+
+      // Ensure we reset the updating state
+      setIsUpdatingCurrency(false);
+
+      // Don't force a final refresh - we're relying on the event system
+      // setTimeout(() => {
+      //   queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      // }, 300);
     }
   };
 
@@ -146,7 +226,11 @@ export function UserDropdown({ user, isLoading = false }: UserDropdownProps) {
                 <GlobeIcon className="mr-2 h-4 w-4" />
                 <span className="text-sm">Currency</span>
               </div>
-              <Select value={userCurrency} onValueChange={handleCurrencyChange}>
+              <Select
+                value={selectedCurrency || userCurrency}
+                onValueChange={handleCurrencyChange}
+                disabled={isUpdatingCurrency}
+              >
                 <SelectTrigger className="h-7 w-20 rounded-full border-muted bg-muted/30 px-2.5 py-0 text-xs">
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>

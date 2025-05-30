@@ -1,17 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
+import { useCurrencyContext } from "@/components/currency-provider";
 
 // Define types based on the API response structure
-export type DashboardFilter =
-  | "7d"
-  | "30d"
-  | "90d"
-  | "180d"
-  | "this_month"
-  | "custom";
+export type DashboardFilter = "7d" | "30d" | "90d" | "this_month" | "custom";
 
 export interface DashboardProduct {
   id: string;
@@ -100,9 +95,9 @@ const fetchDashboardData = async (
       startDate = new Date(now);
       startDate.setDate(now.getDate() - 90);
     } else {
-      // 180d
+      // Default fallback
       startDate = new Date(now);
-      startDate.setDate(now.getDate() - 180);
+      startDate.setDate(now.getDate() - 30);
     }
 
     url += `?start_date=${startDate.toISOString().split("T")[0]}`;
@@ -129,6 +124,7 @@ export function useDashboardData(
   const [customDateRange, setCustomDateRange] = useState<DateRange | null>(
     null
   );
+  const { userCurrency, version } = useCurrencyContext();
 
   // Initialize with reasonable defaults (last 30 days)
   const today = new Date();
@@ -150,10 +146,18 @@ export function useDashboardData(
       : "";
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["dashboard", timeRange, customDateRange],
+    queryKey: ["dashboard", timeRange, customDateRange, userCurrency, version],
     queryFn: () => fetchDashboardData(timeRange, customDateRange),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  // When userCurrency changes, force a hard update of data
+  useEffect(() => {
+    // This runs when currency changes, forcing a refetch
+    if (version > 0) {
+      refetch();
+    }
+  }, [userCurrency, version, refetch]);
 
   return {
     data,
