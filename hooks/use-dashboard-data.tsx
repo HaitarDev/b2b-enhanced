@@ -35,6 +35,13 @@ export interface ShopifyOrder {
     price: string;
     quantity: number;
   }[];
+  customerName?: string;
+  customerEmail?: string;
+  refundAmount?: number;
+  shippingAmount?: number;
+  netRevenue?: number;
+  financialStatus?: string;
+  fulfillmentStatus?: string;
 }
 
 export interface SalesTrendPoint {
@@ -117,9 +124,7 @@ const fetchDashboardData = async (
   return await response.json();
 };
 
-export function useDashboardData(
-  initialTimeRange: DashboardFilter = "this_month"
-) {
+export function useDashboardData(initialTimeRange: DashboardFilter = "30d") {
   const [timeRange, setTimeRange] = useState<DashboardFilter>(initialTimeRange);
   const [customDateRange, setCustomDateRange] = useState<DateRange | null>(
     null
@@ -149,6 +154,8 @@ export function useDashboardData(
     queryKey: ["dashboard", timeRange, customDateRange, userCurrency, version],
     queryFn: () => fetchDashboardData(timeRange, customDateRange),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 3, // Add retry logic
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
   });
 
   // When userCurrency changes, force a hard update of data

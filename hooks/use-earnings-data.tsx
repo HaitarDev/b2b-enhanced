@@ -245,7 +245,7 @@ const fetchEarningsData = async (
           title: product.title || "Untitled Poster",
           image: product.imageUrl || "/placeholder.svg",
           sales: product.salesCount || 0,
-          revenue: parseFloat(((product.revenue || 0) * 0.3).toFixed(2)),
+          revenue: parseFloat((product.revenue || 0).toFixed(2)),
         }));
 
       console.log(
@@ -269,93 +269,6 @@ const fetchEarningsData = async (
       topSellingPosters: earningsData.topSellingPosters.length,
     });
 
-    // If we don't have any data, add some mock data for testing
-    if (
-      earningsData.earnings === 0 &&
-      earningsData.sales === 0 &&
-      earningsData.topSellingPosters.length === 0
-    ) {
-      console.log("API returned empty data, adding mock data for testing");
-
-      // Mock data for testing
-      earningsData.earnings = 1250.75;
-      earningsData.sales = 42;
-
-      // Mock chart data
-      const months = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ];
-      earningsData.chartData.earnings = months.map((month) => ({
-        month,
-        earnings: Math.floor(Math.random() * 500) + 100,
-      }));
-
-      earningsData.chartData.sales = months.map((month) => ({
-        month,
-        sales: Math.floor(Math.random() * 20) + 1,
-      }));
-
-      // Mock top selling posters
-      earningsData.topSellingPosters = [
-        {
-          id: "mock-1",
-          title: "Abstract Composition",
-          image: "/placeholder.svg",
-          sales: 15,
-          revenue: 450.0,
-        },
-        {
-          id: "mock-2",
-          title: "Nature Landscape",
-          image: "/placeholder.svg",
-          sales: 12,
-          revenue: 360.0,
-        },
-        {
-          id: "mock-3",
-          title: "City Skyline",
-          image: "/placeholder.svg",
-          sales: 8,
-          revenue: 240.0,
-        },
-        {
-          id: "mock-4",
-          title: "Ocean Waves",
-          image: "/placeholder.svg",
-          sales: 5,
-          revenue: 150.0,
-        },
-        {
-          id: "mock-5",
-          title: "Mountain View",
-          image: "/placeholder.svg",
-          sales: 2,
-          revenue: 60.0,
-        },
-      ];
-
-      console.log("Added mock data:", {
-        earnings: earningsData.earnings,
-        sales: earningsData.sales,
-        chartDataPoints: {
-          earnings: earningsData.chartData.earnings.length,
-          sales: earningsData.chartData.sales.length,
-        },
-        topSellingPosters: earningsData.topSellingPosters.length,
-      });
-    }
-
     return earningsData;
   } catch (error) {
     console.error("Error fetching earnings data:", error);
@@ -375,9 +288,7 @@ const fetchEarningsData = async (
   }
 };
 
-export function useEarningsData(
-  initialTimeRange: DashboardFilter = "this_month"
-) {
+export function useEarningsData(initialTimeRange: DashboardFilter = "30d") {
   const [timeRange, setTimeRange] = useState<DashboardFilter>(initialTimeRange);
   const [customDateRange, setCustomDateRange] = useState<DateRange | null>(
     null

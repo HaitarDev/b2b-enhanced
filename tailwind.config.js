@@ -1,9 +1,13 @@
-const { fontFamily } = require("tailwindcss/defaultTheme")
+const { fontFamily } = require("tailwindcss/defaultTheme");
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ["class"],
-  content: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "*.{js,ts,jsx,tsx,mdx}"],
+  content: [
+    "app/**/*.{ts,tsx}",
+    "components/**/*.{ts,tsx}",
+    "*.{js,ts,jsx,tsx,mdx}",
+  ],
   theme: {
     extend: {
       fontFamily: {
@@ -89,5 +93,8 @@ module.exports = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/container-queries")],
-}
+  plugins: [
+    require("tailwindcss-animate"),
+    require("@tailwindcss/container-queries"),
+  ],
+};

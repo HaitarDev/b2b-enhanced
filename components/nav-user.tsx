@@ -126,6 +126,7 @@ export function NavUser({
             <DropdownMenuItem
               onClick={() => {
                 supabase.auth.signOut();
+                router.push("/");
               }}
             >
               <LogOutIcon />

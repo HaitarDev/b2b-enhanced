@@ -83,171 +83,199 @@ export function useOrdersData() {
   const transformOrders = (
     shopifyOrders: ShopifyOrder[] = []
   ): EnhancedOrder[] => {
+    console.log("\n=== FRONTEND ORDER TRANSFORMATION START ===");
     console.log("Raw Shopify Orders Data count:", shopifyOrders.length);
 
-    // First deduplicate orders by ID using the utility function
-    const uniqueOrders = deduplicateOrders(shopifyOrders);
+    // Log raw data structure
+    console.log("\nRaw Shopify Orders (first 3):");
+    shopifyOrders.slice(0, 3).forEach((order, index) => {
+      console.log(`  Order ${index + 1}:`, {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        createdAt: order.createdAt,
+        totalAmount: order.totalAmount,
+        lineItemsCount: order.lineItems?.length || 0,
+        lineItems: order.lineItems?.map((item) => ({
+          id: item.id,
+          productId: item.productId,
+          title: item.title,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        refundAmount: order.refundAmount,
+        shippingAmount: order.shippingAmount,
+        netRevenue: order.netRevenue,
+        financialStatus: order.financialStatus,
+      });
+    });
 
+    // The API now handles order splitting and deduplication correctly,
+    // so we don't need to deduplicate here - each entry is intentional
     console.log(
-      "Deduplicated Orders count:",
-      uniqueOrders.length,
-      "after removing duplicate orders"
+      "\nSkipping deduplication - API handles order splitting correctly"
+    );
+    console.log("Total orders from API:", shopifyOrders.length);
+
+    // The API now handles order splitting, so we just need to transform the data
+    const orderEntries: EnhancedOrder[] = shopifyOrders.map(
+      (order, orderIndex) => {
+        console.log(
+          `\n--- Transforming order ${orderIndex + 1}/${
+            shopifyOrders.length
+          }: ${order.orderNumber} ---`
+        );
+        console.log(`  Original ID: ${order.id}`);
+        console.log(`  Order Number: ${order.orderNumber}`);
+        console.log(`  Line Items Count: ${order.lineItems?.length || 0}`);
+        console.log(`  Total Amount: ${order.totalAmount}`);
+        console.log(`  Financial Status: ${order.financialStatus}`);
+        console.log(`  Customer: ${order.customerName}`);
+        console.log(`  Refund Amount: ${order.refundAmount}`);
+        console.log(`  Shipping Amount: ${order.shippingAmount}`);
+        console.log(`  Net Revenue: ${order.netRevenue}`);
+
+        // Determine order status based on Shopify data
+        let status: OrderStatus = "Unknown";
+        const financialStatus = order.financialStatus?.toLowerCase() || "";
+
+        console.log(`  Processing financial status: "${financialStatus}"`);
+
+        // Determine status based on financial status if available
+        if (
+          financialStatus.includes("paid") ||
+          financialStatus.includes("complete")
+        ) {
+          status = "Paid";
+        } else if (
+          financialStatus.includes("refund") ||
+          financialStatus === "refunded"
+        ) {
+          status = "Refunded";
+        } else if (
+          financialStatus.includes("pending") ||
+          financialStatus.includes("processing")
+        ) {
+          status = "Processing";
+        } else if (
+          financialStatus.includes("cancel") ||
+          financialStatus.includes("voided")
+        ) {
+          status = "Cancelled";
+        } else {
+          // Fall back to deterministic approach if financial status not available
+          const statusSeed = order.id.charCodeAt(order.id.length - 1) % 10;
+          if (statusSeed < 6) {
+            status = "Paid";
+          } else if (statusSeed < 8) {
+            status = "Processing";
+          } else if (statusSeed < 9) {
+            status = "Refunded";
+          } else {
+            status = "Cancelled";
+          }
+          console.log(
+            `  Used fallback status determination (seed: ${statusSeed})`
+          );
+        }
+
+        console.log(`  Determined status: ${status}`);
+
+        // Get customer information
+        const customerName = order.customerName || "Unknown Customer";
+        const customerEmail = order.customerEmail || "";
+
+        // Use the values already calculated by the API
+        const refundAmount = order.refundAmount || 0;
+        const shippingAmount = order.shippingAmount || 0;
+        const total = parseFloat(order.totalAmount || "0");
+
+        // Calculate correct net revenue and refund amount based on status
+        let netRevenue = order.netRevenue || 0;
+        let finalRefundAmount = refundAmount;
+
+        // For refunded orders, ensure proper refund amount and net revenue calculation
+        if (status === "Refunded") {
+          // For fully refunded orders, refund amount should equal the total
+          if (refundAmount === 0 || refundAmount < total) {
+            // If API didn't provide correct refund amount, set it to the full total
+            finalRefundAmount = total;
+          }
+
+          // For fully refunded orders, net revenue should always be 0
+          netRevenue = 0;
+
+          console.log(
+            `  Refunded order: total=${total}, originalRefund=${refundAmount}, correctedRefund=${finalRefundAmount}, corrected netRevenue=${netRevenue}`
+          );
+        } else if (refundAmount > 0) {
+          // For partial refunds on non-refunded orders
+          netRevenue = Math.max(0, total - refundAmount);
+          finalRefundAmount = refundAmount;
+
+          console.log(
+            `  Partial refund: total=${total}, refund=${refundAmount}, netRevenue=${netRevenue}`
+          );
+        }
+
+        // Transform line items
+        const items = order.lineItems.map((item) => ({
+          id: item.id,
+          name: item.title,
+          quantity: item.quantity,
+          price: parseFloat(item.price),
+        }));
+
+        console.log(`  Transformed line items:`, items);
+
+        const transformedOrder = {
+          id: order.orderNumber,
+          date: new Date(order.createdAt),
+          status,
+          total,
+          customer: customerName,
+          email: customerEmail || `customer-${order.orderNumber}@example.com`,
+          items,
+          originalShopifyOrder: order as EnhancedShopifyOrder,
+          customerName,
+          customerEmail,
+          refundAmount: finalRefundAmount,
+          shippingAmount,
+          netRevenue,
+        };
+
+        console.log(`  ✅ Transformed order result:`, {
+          id: transformedOrder.id,
+          status: transformedOrder.status,
+          total: transformedOrder.total,
+          customer: transformedOrder.customer,
+          itemsCount: transformedOrder.items.length,
+          refundAmount: transformedOrder.refundAmount,
+          shippingAmount: transformedOrder.shippingAmount,
+          netRevenue: transformedOrder.netRevenue,
+        });
+
+        return transformedOrder;
+      }
     );
 
-    // Merge line items for orders that have the same ID but different line items
-    const orderMap = new Map<string, EnhancedShopifyOrder>();
+    console.log(`\n=== FRONTEND TRANSFORMATION COMPLETE ===`);
+    console.log(
+      `Transformed ${orderEntries.length} order entries from ${shopifyOrders.length} API orders`
+    );
 
-    // Group line items by order ID
-    uniqueOrders.forEach((order) => {
-      const orderId = order.id;
-
-      if (!orderMap.has(orderId)) {
-        // First time seeing this order - add it to the map
-        orderMap.set(orderId, { ...(order as EnhancedShopifyOrder) });
-      } else {
-        // We've seen this order before - merge the line items
-        const existingOrder = orderMap.get(orderId)!;
-
-        // Add any new line items
-        if (order.lineItems && Array.isArray(order.lineItems)) {
-          existingOrder.lineItems = [
-            ...(existingOrder.lineItems || []),
-            ...order.lineItems.filter(
-              (item) =>
-                !existingOrder.lineItems.some(
-                  (existingItem) => existingItem.id === item.id
-                )
-            ),
-          ];
-        }
-      }
+    // Log summary of transformed orders
+    console.log(`\nTransformed orders summary:`);
+    orderEntries.forEach((entry, index) => {
+      console.log(
+        `  ${index + 1}. ${entry.id} - ${entry.status} - $${
+          entry.total
+        } (Net: $${entry.netRevenue}) - ${entry.items?.length || 0} items`
+      );
     });
 
-    // Now process each unique order with all its line items
-    return Array.from(orderMap.values()).map((order) => {
-      console.log(
-        `Processing order ${order.id} - ${order.orderNumber} with ${order.lineItems.length} line items`
-      );
-
-      // Determine order status based on Shopify data
-      let status: OrderStatus = "Unknown";
-      let refundAmount = 0;
-      let shippingAmount = 0;
-      let customerName = "Unknown Customer";
-      let customerEmail = "";
-
-      // Extract financial status if available
-      const financialStatus = order.financialStatus?.toLowerCase() || "";
-
-      // Determine status based on financial status if available
-      if (
-        financialStatus.includes("paid") ||
-        financialStatus.includes("complete")
-      ) {
-        status = "Paid";
-      } else if (financialStatus.includes("refund")) {
-        status = "Refunded";
-      } else if (
-        financialStatus.includes("pending") ||
-        financialStatus.includes("processing")
-      ) {
-        status = "Processing";
-      } else if (
-        financialStatus.includes("cancel") ||
-        financialStatus.includes("voided")
-      ) {
-        status = "Cancelled";
-      } else {
-        // Fall back to deterministic approach if financial status not available
-        const statusSeed = order.id.charCodeAt(order.id.length - 1) % 10;
-        if (statusSeed < 6) {
-          status = "Paid";
-        } else if (statusSeed < 8) {
-          status = "Processing";
-        } else if (statusSeed < 9) {
-          status = "Refunded";
-        } else {
-          status = "Cancelled";
-        }
-      }
-
-      // Get customer information if available
-      if (order.customerName) {
-        customerName = order.customerName || "Unknown Customer";
-      }
-
-      if (order.customerEmail) {
-        customerEmail = order.customerEmail || "";
-      }
-
-      // Get refund and shipping amounts if available
-      if (status === "Refunded") {
-        // For refunded orders, use the full order amount as the refund amount
-        refundAmount = parseFloat(order.totalAmount);
-        console.log(
-          `Order ${order.orderNumber} is REFUNDED - setting full refund amount: ${refundAmount}`
-        );
-      } else if (order.refundAmount !== undefined) {
-        refundAmount = order.refundAmount || 0;
-        console.log(
-          `Order ${order.orderNumber} has refundAmount: ${refundAmount}`
-        );
-      } else {
-        console.log(`Order ${order.orderNumber} has NO refundAmount field`);
-      }
-
-      if (order.shippingAmount !== undefined) {
-        shippingAmount = order.shippingAmount || 0;
-        console.log(
-          `Order ${order.orderNumber} has shippingAmount: ${shippingAmount}`
-        );
-      } else {
-        console.log(`Order ${order.orderNumber} has NO shippingAmount field`);
-      }
-
-      // Map items from Shopify format to our format
-      const items = order.lineItems.map((item) => ({
-        id: item.id,
-        name: item.title,
-        quantity: item.quantity,
-        price: parseFloat(item.price),
-      }));
-
-      // Calculate order total
-      const total = parseFloat(order.totalAmount);
-
-      // Calculate net revenue
-      // For refunded orders, net revenue is zero
-      // For others, subtract any partial refunds
-      let netRevenue = total;
-      if (status === "Refunded") {
-        netRevenue = 0;
-      } else if (status !== "Cancelled") {
-        netRevenue = total - refundAmount;
-      } else {
-        netRevenue = 0;
-      }
-
-      console.log(
-        `Order ${order.orderNumber} - Total: ${total}, Refund: ${refundAmount}, Net: ${netRevenue}, Status: ${status}`
-      );
-
-      return {
-        id: order.orderNumber,
-        date: new Date(order.createdAt),
-        status,
-        total,
-        customer: customerName,
-        email: customerEmail || `customer-${order.orderNumber}@example.com`,
-        items,
-        originalShopifyOrder: order,
-        customerName,
-        customerEmail,
-        refundAmount,
-        shippingAmount,
-        netRevenue,
-      };
-    });
+    return orderEntries;
   };
 
   // Filter orders based on selected time range

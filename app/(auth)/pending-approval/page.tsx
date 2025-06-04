@@ -12,8 +12,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
 const PendingApproval = () => {
   const supabase = createClient();
+  const router = useRouter();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-white to-artist-light p-4">
       <div className="w-full max-w-md">
@@ -55,6 +57,7 @@ const PendingApproval = () => {
               className="w-full"
               onClick={() => {
                 supabase.auth.signOut();
+                router.push("/");
               }}
             >
               <ArrowLeftIcon className="mr-2 h-4 w-4" />

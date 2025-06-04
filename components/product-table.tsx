@@ -26,6 +26,7 @@ import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,137 +89,10 @@ export const productSchema = z.object({
   image: z.string().optional(),
   shopUrl: z.string().optional(),
   shopifyProductId: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
 });
 
 export type Product = z.infer<typeof productSchema>;
-
-// Updated sample product data with all status types
-const sampleProducts: Product[] = [
-  {
-    id: "P001",
-    name: "Minimalist Abstract Art Poster",
-    sales: 42,
-    status: "Approved",
-    revenue: 840.0,
-    commission: 252.0,
-    image: "/abstract-composition.png",
-    shopUrl: "#",
-    shopifyProductId: "P001",
-  },
-  {
-    id: "P002",
-    name: "Vintage Travel Poster - Paris",
-    sales: 38,
-    status: "Approved",
-    revenue: 760.0,
-    commission: 228.0,
-    image: "/paris-travel.png",
-    shopUrl: "#",
-    shopifyProductId: "P002",
-  },
-  {
-    id: "P003",
-    name: "Motivational Quote Poster",
-    sales: 27,
-    status: "Approved",
-    revenue: 540.0,
-    commission: 162.0,
-    image: "/motivational-quote.png",
-    shopUrl: "#",
-    shopifyProductId: "P003",
-  },
-  {
-    id: null,
-    name: "Nature Landscape Poster",
-    sales: 31,
-    status: "Approved",
-    revenue: 620.0,
-    commission: 186.0,
-    image: "/serene-mountain-lake.png",
-    shopUrl: "#",
-    shopifyProductId: null,
-  },
-  {
-    id: "P005",
-    name: "Movie Classic Poster",
-    sales: 19,
-    status: "Rejected",
-    revenue: 380.0,
-    commission: 114.0,
-    image: "/classic-movie.png",
-    shopUrl: "#",
-  },
-  {
-    id: "P006",
-    name: "Geometric Pattern Poster",
-    sales: 24,
-    status: "Approved",
-    revenue: 480.0,
-    commission: 144.0,
-    image: "/abstract-geometric-pattern.png",
-    shopUrl: "#",
-  },
-  {
-    id: "P007",
-    name: "Cityscape Night Poster",
-    sales: 15,
-    status: "Pending",
-    revenue: 300.0,
-    commission: 90.0,
-    image: "/cityscape-night.png",
-    shopUrl: "#",
-  },
-  {
-    id: "P008",
-    name: "Botanical Illustration Poster",
-    sales: 22,
-    status: "Approved",
-    revenue: 440.0,
-    commission: 132.0,
-    image: "/botanical-illustration.png",
-    shopUrl: "#",
-  },
-  {
-    id: "P009",
-    name: "Space Exploration Poster",
-    sales: 29,
-    status: "Will be deleted",
-    revenue: 580.0,
-    commission: 174.0,
-    image: "/vast-space-exploration.png",
-    shopUrl: "#",
-  },
-  {
-    id: "P010",
-    name: "Retro Gaming Poster",
-    sales: 18,
-    status: "Deleted",
-    revenue: 360.0,
-    commission: 108.0,
-    image: "/retro-gaming-setup.png",
-    shopUrl: "#",
-  },
-  {
-    id: "P011",
-    name: "Watercolor Art Poster",
-    sales: 26,
-    status: "Approved",
-    revenue: 520.0,
-    commission: 156.0,
-    image: "/watercolor-abstract.png",
-    shopUrl: "#",
-  },
-  {
-    id: "P012",
-    name: "Music Festival Poster",
-    sales: 33,
-    status: "Pending",
-    revenue: 660.0,
-    commission: 198.0,
-    image: "/vibrant-music-festival.png",
-    shopUrl: "#",
-  },
-];
 
 // Helper function to get badge styling based on status
 const getStatusBadgeStyle = (status: string) => {
@@ -306,11 +180,15 @@ const getColumns = (
     ),
   },
   {
-    accessorKey: "id",
-    header: () => <div className="text-center">Product ID</div>,
+    accessorKey: "createdAt",
+    header: () => <div className="text-center">Added</div>,
     cell: ({ row }) => (
-      <div className="text-center font-mono text-xs font-normal text-foreground">
-        {row.original.id || "—"}
+      <div className="text-center font-normal text-foreground">
+        {row.original.createdAt
+          ? formatDistanceToNow(new Date(row.original.createdAt), {
+              addSuffix: true,
+            })
+          : "—"}
       </div>
     ),
   },
@@ -366,10 +244,12 @@ function DeleteProductButton({
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>Mark Product for Deletion</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the product &quot;{product.name}
-              &quot; from your account. This action cannot be undone.
+              Are you sure you want to mark &quot;{product.name}&quot; for
+              deletion? The product will be automatically deleted in the next 24
+              hours. This action can be reversed by changing the product status
+              before the automatic deletion occurs.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -381,7 +261,7 @@ function DeleteProductButton({
               }}
               className="bg-red-600 hover:bg-red-700"
             >
-              Delete
+              Mark for Deletion
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -413,6 +293,7 @@ export function ProductTable({
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
   );
+  console.log(products);
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
@@ -434,30 +315,34 @@ export function ProductTable({
 
         // Check if product has an ID
         if (product.id) {
-          // Delete the product from Supabase
+          // Instead of deleting, update status to willBeDeleted
           const { error } = await supabase
             .from("posters")
-            .delete()
+            .update({ status: "willBeDeleted" })
             .eq("id", product.id);
 
           if (error) {
-            throw new Error(`Failed to delete product: ${error.message}`);
+            throw new Error(
+              `Failed to mark product for deletion: ${error.message}`
+            );
           }
         } else {
           throw new Error("Product ID not found");
         }
       } catch (error: any) {
-        console.error("Error deleting product:", error);
+        console.error("Error marking product for deletion:", error);
         throw error;
       }
     },
     onSuccess: () => {
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast.success("Product deleted successfully");
+      toast.success(
+        "Product marked for deletion. It will be automatically deleted in the next 24 hours."
+      );
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to delete product");
+      toast.error(error.message || "Failed to mark product for deletion");
     },
   });
 

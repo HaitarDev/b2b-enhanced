@@ -157,21 +157,8 @@ export function ChartAreaInteractive() {
 
     // Generate some default data for testing if the data is empty or invalid
     if (data.salesTrend.length === 0) {
-      const today = new Date();
-      const result: ChartDataPoint[] = [];
-
-      for (let i = 0; i < 10; i++) {
-        const date = subDays(today, i * 3);
-        result.unshift({
-          date: format(date, "yyyy-MM-dd"),
-          formattedDate: format(date, "MMM dd"),
-          sales: Math.floor(Math.random() * 10),
-          revenue: Math.floor(Math.random() * 1000),
-        });
-      }
-
-      console.log("Generated sample data:", result);
-      return result;
+      console.log("No sales trend data available");
+      return [];
     }
 
     // Based on time range, transform the data for display
@@ -578,15 +565,15 @@ export function ChartAreaInteractive() {
           <div className="flex h-[350px] w-full items-center justify-center">
             <Skeleton className="h-full w-full rounded-md" />
           </div>
+        ) : processedData.length === 0 ? (
+          <div className="flex h-[350px] w-full items-center justify-center text-muted-foreground">
+            No sales data available for this period
+          </div>
         ) : (
           <ChartContainer config={chartConfig} className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={
-                  processedData.length > 0
-                    ? processedData
-                    : generateFallbackData()
-                }
+                data={processedData}
                 margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
               >
                 <defs>
@@ -667,23 +654,4 @@ export function ChartAreaInteractive() {
       </CardContent>
     </Card>
   );
-}
-
-// Generate fallback data to ensure chart always shows something
-function generateFallbackData(): ChartDataPoint[] {
-  const today = new Date();
-  const result: ChartDataPoint[] = [];
-
-  for (let i = 0; i < 10; i++) {
-    const date = subDays(today, i * 3);
-    result.unshift({
-      date: format(date, "yyyy-MM-dd"),
-      formattedDate: format(date, "MMM dd"),
-      sales: Math.floor(Math.random() * 10) + 1, // Ensure non-zero values
-      revenue: Math.floor(Math.random() * 1000) + 100,
-    });
-  }
-
-  console.log("Using fallback sample data:", result);
-  return result;
 }

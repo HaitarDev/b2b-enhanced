@@ -213,12 +213,16 @@ export function CurrencyDisplay({
   // No need to show approximation if currencies are the same
   const needsConversion = sourceCurrency !== userCurrency;
 
+  // Simple logic: Don't show approx if user currency is GBP or null
+  const shouldShowApprox =
+    showApprox && userCurrency !== "GBP" && userCurrency !== null;
+
   // Key the component based on currency to force complete re-rendering
   const displayKey = `currency-display-${userCurrency}-${sourceCurrency}-${version}-${updateCounter}`;
 
   return (
     <div key={displayKey} className={`flex flex-col ${className}`}>
-      {needsConversion && showApprox ? (
+      {needsConversion && shouldShowApprox ? (
         <>
           {/* Original amount always in source currency */}
           <div className="text-2xl font-semibold">
@@ -246,7 +250,7 @@ export function CurrencyDisplay({
           </div>
         </>
       ) : (
-        // Simple display for same currency
+        // Simple display for same currency or when approx should be hidden
         <div className="text-2xl font-semibold">
           {isConverting ? (
             <Skeleton className="h-6 w-24" />

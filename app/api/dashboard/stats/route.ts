@@ -50,114 +50,6 @@ type ShopifyOrderData = {
   fulfillmentStatus?: string;
 };
 
-// Shopify GraphQL response types
-interface ShopifyGraphQLLineItem {
-  id: string;
-  title: string;
-  quantity: number;
-  product: {
-    id: string;
-  };
-  variant: {
-    id: string;
-    title: string;
-  };
-  discountedTotalSet?: {
-    shopMoney: {
-      amount: string;
-      currencyCode: string;
-    };
-  };
-  originalTotalSet?: {
-    shopMoney: {
-      amount: string;
-      currencyCode: string;
-    };
-  };
-}
-
-interface ShopifyGraphQLRefund {
-  id: string;
-  createdAt: string;
-  note?: string;
-  refundLineItems: {
-    edges: Array<{
-      node: {
-        lineItem: {
-          id: string;
-          product?: {
-            id: string;
-          };
-          quantity: number;
-          originalTotalSet?: {
-            shopMoney: {
-              amount: string;
-            };
-          };
-        };
-        quantity: number;
-        restockType: string;
-        subtotalSet?: {
-          shopMoney: {
-            amount: string;
-          };
-        };
-      };
-    }>;
-  };
-}
-
-interface ShopifyGraphQLOrder {
-  id: string;
-  name: string;
-  createdAt: string;
-  displayFinancialStatus: string;
-  totalPriceSet: {
-    shopMoney: {
-      amount: string;
-      currencyCode: string;
-    };
-  };
-  totalShippingPriceSet?: {
-    shopMoney: {
-      amount: string;
-      currencyCode: string;
-    };
-  };
-  customer?: {
-    displayName?: string;
-    email?: string;
-  };
-  refunds?: ShopifyGraphQLRefund[];
-  lineItems: {
-    edges: Array<{
-      node: ShopifyGraphQLLineItem;
-    }>;
-  };
-}
-
-interface ShopifyGraphQLOrdersResponse {
-  data?: {
-    orders?: {
-      edges: Array<{
-        node: ShopifyGraphQLOrder;
-      }>;
-      pageInfo: {
-        hasNextPage: boolean;
-        endCursor: string | null;
-      };
-    };
-  };
-  errors?: Array<{
-    message: string;
-    locations?: Array<{
-      line: number;
-      column: number;
-    }>;
-    path?: string[];
-  }>;
-}
-
 // Shopify product data from API response
 type ShopifyProductData = {
   id: number;
@@ -333,9 +225,10 @@ async function fetchShopifyProductData(
         console.log("Fetching first page of orders");
       }
 
-      const query = `
-        query getOrdersByProductId($cursor: String, $queryString: String!) {
-          orders(first: ${pageSize}, query: $queryString, after: $cursor) {
+      const query = cursor
+        ? `
+        query getOrdersByProducts($queryString: String!, $cursor: String!) {
+          orders(first: 50, after: $cursor, query: $queryString) {
             edges {
               node {
                 id
@@ -354,6 +247,40 @@ async function fetchShopifyProductData(
                     currencyCode
                   }
                 }
+                customer {
+                  displayName
+                  email
+                }
+                refunds {
+                  id
+                  createdAt
+                  note
+                  refundLineItems {
+                    edges {
+                      node {
+                        lineItem {
+                          id
+                          product {
+                            id
+                          }
+                          quantity
+                          originalTotalSet {
+                            shopMoney {
+                              amount
+                            }
+                          }
+                        }
+                        quantity
+                        restockType
+                        subtotalSet {
+                          shopMoney {
+                            amount
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
                 lineItems(first: 20) {
                   edges {
                     node {
@@ -369,19 +296,97 @@ async function fetchShopifyProductData(
                         title
                         price
                         sku
-                        inventoryQuantity
-                        selectedOptions {
-                          name
-                          value
-                        }
                       }
-                      discountedTotalSet {
+                      originalUnitPriceSet {
                         shopMoney {
                           amount
                           currencyCode
                         }
                       }
-                      originalTotalSet {
+                    }
+                  }
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      `
+        : `
+        query getOrdersByProducts($queryString: String!) {
+          orders(first: 50, query: $queryString) {
+            edges {
+              node {
+                id
+                name
+                createdAt
+                displayFinancialStatus
+                totalPriceSet {
+                  shopMoney {
+                    amount
+                    currencyCode
+                  }
+                }
+                totalShippingPriceSet {
+                  shopMoney {
+                    amount
+                    currencyCode
+                  }
+                }
+                customer {
+                  displayName
+                  email
+                }
+                refunds {
+                  id
+                  createdAt
+                  note
+                  refundLineItems {
+                    edges {
+                      node {
+                        lineItem {
+                          id
+                          product {
+                            id
+                          }
+                          quantity
+                          originalTotalSet {
+                            shopMoney {
+                              amount
+                            }
+                          }
+                        }
+                        quantity
+                        restockType
+                        subtotalSet {
+                          shopMoney {
+                            amount
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                lineItems(first: 20) {
+                  edges {
+                    node {
+                      id
+                      title
+                      quantity
+                      product {
+                        id
+                        title
+                      }
+                      variant {
+                        id
+                        title
+                        price
+                        sku
+                      }
+                      originalUnitPriceSet {
                         shopMoney {
                           amount
                           currencyCode
@@ -400,11 +405,15 @@ async function fetchShopifyProductData(
         }
       `;
 
-      // Execute the GraphQL query
-      const variables: { cursor: string | null; queryString: string } = {
-        cursor,
+      // Execute the GraphQL query with variables
+      const variables: any = {
         queryString: `status:any line_items_product_id:${productId}${dateFilter}`,
       };
+
+      // Only include cursor if we have one
+      if (cursor) {
+        variables.cursor = cursor;
+      }
 
       console.log("Debug - GraphQL variables:", JSON.stringify(variables));
 
@@ -417,313 +426,321 @@ async function fetchShopifyProductData(
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
-        const { data, errors, extensions } = await retryWithBackoff(() =>
-          graphqlClient.request(query, {
-            variables,
+        const response = await retryWithBackoff(() =>
+          graphqlClient.query({
+            data: { query, variables },
           })
         );
 
         // Process response with error handling
-        if (errors) {
-          console.error("GraphQL Errors:", errors);
-          console.log("Falling back to REST API...");
+        if (
+          response.body &&
+          typeof response.body === "object" &&
+          "data" in response.body
+        ) {
+          const responseData = response.body as ShopifyGraphQLOrdersResponse;
 
-          // Simple fallback - return empty results for this product
-          console.log(
-            `GraphQL query failed for product ${
-              productId || "unknown"
-            }, returning empty results`
-          );
-          return {
-            product: productData.product,
-            salesCount: 0,
-            revenue: 0,
-            commission: 0,
-            recentOrders: [],
-          };
-        }
+          if (responseData.errors) {
+            console.error("GraphQL Errors:", responseData.errors);
+            console.log("Falling back to REST API...");
 
-        // Convert to expected structure for compatibility with existing code
-        const responseData = {
-          data: {
-            orders: data?.orders || {
-              edges: [],
-              pageInfo: { hasNextPage: false, endCursor: null },
-            },
-          },
-        };
-
-        const orderData = responseData.data.orders;
-        console.log(
-          `Processing ${
-            orderData.edges.length
-          } orders from page ${pageCount} (${cursor || "initial"})`
-        );
-
-        // For large queries, stop after collecting enough data to avoid timeouts
-        if (is6MonthQuery && recentOrders.length > 30) {
-          console.log(
-            "Collected sufficient data for 6-month query, stopping pagination"
-          );
-          hasNextPage = false;
-          break;
-        }
-
-        // Process each order
-        orderData.edges.forEach(
-          ({ node: order }: { node: ShopifyGraphQLOrder }) => {
-            // Log the order for debugging
+            // Simple fallback - return empty results for this product
             console.log(
-              `Processing order ${order.id} with status ${order.displayFinancialStatus}`
+              `GraphQL query failed for product ${
+                productId || "unknown"
+              }, returning empty results`
             );
+            return {
+              product: productData.product,
+              salesCount: 0,
+              revenue: 0,
+              commission: 0,
+              recentOrders: [],
+            };
+          }
 
-            // Process line items for this product
-            const allLineItems = order.lineItems.edges.map(
-              (edge: { node: ShopifyGraphQLLineItem }) => edge.node
+          // Convert to expected structure for compatibility with existing code
+          const orderData = responseData.data?.orders || {
+            edges: [],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          };
+
+          console.log(
+            `Processing ${
+              orderData.edges.length
+            } orders from page ${pageCount} (${cursor || "initial"})`
+          );
+
+          // For large queries, stop after collecting enough data to avoid timeouts
+          if (is6MonthQuery && recentOrders.length > 30) {
+            console.log(
+              "Collected sufficient data for 6-month query, stopping pagination"
             );
-            console.log(`Order has ${allLineItems.length} line items total`);
+            hasNextPage = false;
+            break;
+          }
 
-            // Only count paid or partially paid orders
-            const status = order.displayFinancialStatus?.toUpperCase() || "";
-            if (
-              status === "PAID" ||
-              status === "PARTIALLY_PAID" ||
-              status === "PARTIALLY_REFUNDED" ||
-              status.includes("PAID") ||
-              status.includes("COMPLETE")
-            ) {
-              // Filter line items for the specific product ID
-              const lineItems = allLineItems.filter(
-                (item: ShopifyGraphQLLineItem) => {
-                  if (!item.product || !item.product.id) return false;
-
-                  // GraphQL IDs often have a format like "gid://shopify/Product/12345"
-                  // Extract just the numeric part for comparison
-                  const graphqlId = item.product.id;
-                  const numericId = graphqlId.split("/").pop();
-
-                  const isMatch = numericId === productId;
-                  if (isMatch) {
-                    console.log(
-                      `Found matching product! GraphQL ID: ${graphqlId}, Expected product ID: ${productId}`
-                    );
-                  }
-                  return isMatch;
-                }
+          // Process each order
+          orderData.edges.forEach(
+            ({ node: order }: { node: ShopifyGraphQLOrder }) => {
+              // Log the order for debugging
+              console.log(
+                `Processing order ${order.id} with status ${order.displayFinancialStatus}`
               );
 
-              // Only process if we found line items for this product
-              if (lineItems.length > 0) {
-                let orderItemsCount = 0;
-                let orderRevenue = 0;
+              // Process line items for this product
+              const allLineItems = order.lineItems.edges.map(
+                (edge: { node: ShopifyGraphQLLineItem }) => edge.node
+              );
+              console.log(`Order has ${allLineItems.length} line items total`);
 
-                // Process each line item in a simpler way - similar to getShopifySalesTrend
-                lineItems.forEach((item: ShopifyGraphQLLineItem) => {
-                  // Add to sales count
-                  orderItemsCount += item.quantity || 0;
+              // Only count paid or partially paid orders
+              const status = order.displayFinancialStatus?.toUpperCase() || "";
+              if (
+                status === "PAID" ||
+                status === "PARTIALLY_PAID" ||
+                status === "PARTIALLY_REFUNDED" ||
+                status.includes("PAID") ||
+                status.includes("COMPLETE")
+              ) {
+                // Filter line items for the specific product ID
+                const lineItems = allLineItems.filter(
+                  (item: ShopifyGraphQLLineItem) => {
+                    if (!item.product || !item.product.id) return false;
 
-                  // Calculate revenue directly from the line item
-                  if (item.discountedTotalSet?.shopMoney?.amount) {
-                    orderRevenue += parseFloat(
-                      item.discountedTotalSet.shopMoney.amount
-                    );
-                    console.log(
-                      `Item ${item.id}: quantity=${item.quantity}, revenue=${item.discountedTotalSet.shopMoney.amount}`
-                    );
-                  } else if (item.originalTotalSet?.shopMoney?.amount) {
-                    // Fallback to original price if discounted not available
-                    orderRevenue += parseFloat(
-                      item.originalTotalSet.shopMoney.amount
-                    );
-                    console.log(
-                      `Item ${item.id} (using original price): quantity=${item.quantity}, revenue=${item.originalTotalSet.shopMoney.amount}`
-                    );
-                  } else {
-                    console.log(
-                      `Warning: No price information for item ${item.id} in order ${order.id}`
-                    );
+                    // GraphQL IDs often have a format like "gid://shopify/Product/12345"
+                    // Extract just the numeric part for comparison
+                    const graphqlId = item.product.id;
+                    const numericId = graphqlId.split("/").pop();
+
+                    const isMatch = numericId === productId;
+                    if (isMatch) {
+                      console.log(
+                        `Found matching product! GraphQL ID: ${graphqlId}, Expected product ID: ${productId}`
+                      );
+                    }
+                    return isMatch;
                   }
-                });
-
-                // Update total counters
-                salesCount += orderItemsCount;
-                revenue += orderRevenue;
-
-                console.log(
-                  `Order ${
-                    order.id
-                  }: Added ${orderItemsCount} items with total revenue ${orderRevenue.toFixed(
-                    2
-                  )}`
                 );
 
-                // Add to recent orders (limit to most recent 50)
-                if (recentOrders.length < 50) {
-                  const lineItemsFormatted = lineItems.map(
-                    (item: ShopifyGraphQLLineItem) => {
-                      // Get the actual price per unit
-                      let pricePerUnit = "0.00";
-                      if (item.quantity > 0) {
-                        if (item.discountedTotalSet?.shopMoney?.amount) {
-                          pricePerUnit = (
-                            parseFloat(
-                              item.discountedTotalSet.shopMoney.amount
-                            ) / item.quantity
-                          ).toFixed(2);
-                        } else if (item.originalTotalSet?.shopMoney?.amount) {
-                          pricePerUnit = (
-                            parseFloat(item.originalTotalSet.shopMoney.amount) /
-                            item.quantity
-                          ).toFixed(2);
-                        }
-                      }
+                // Only process if we found line items for this product
+                if (lineItems.length > 0) {
+                  let orderItemsCount = 0;
+                  let orderRevenue = 0;
 
-                      return {
-                        id: item.id,
-                        productId: productId,
-                        title: item.title,
-                        price: pricePerUnit,
-                        quantity: item.quantity,
-                        variantId: item.variant?.id,
-                        variantTitle: item.variant?.title,
-                      };
+                  // Process each line item in a simpler way - similar to getShopifySalesTrend
+                  lineItems.forEach((item: ShopifyGraphQLLineItem) => {
+                    // Add to sales count
+                    orderItemsCount += item.quantity || 0;
+
+                    // Calculate revenue directly from the line item
+                    if (item.discountedTotalSet?.shopMoney?.amount) {
+                      orderRevenue += parseFloat(
+                        item.discountedTotalSet.shopMoney.amount
+                      );
+                      console.log(
+                        `Item ${item.id}: quantity=${item.quantity}, revenue=${item.discountedTotalSet.shopMoney.amount}`
+                      );
+                    } else if (item.originalTotalSet?.shopMoney?.amount) {
+                      // Fallback to original price if discounted not available
+                      orderRevenue += parseFloat(
+                        item.originalTotalSet.shopMoney.amount
+                      );
+                      console.log(
+                        `Item ${item.id} (using original price): quantity=${item.quantity}, revenue=${item.originalTotalSet.shopMoney.amount}`
+                      );
+                    } else {
+                      console.log(
+                        `Warning: No price information for item ${item.id} in order ${order.id}`
+                      );
                     }
+                  });
+
+                  // Update total counters
+                  salesCount += orderItemsCount;
+                  revenue += orderRevenue;
+
+                  console.log(
+                    `Order ${
+                      order.id
+                    }: Added ${orderItemsCount} items with total revenue ${orderRevenue.toFixed(
+                      2
+                    )}`
                   );
 
-                  // Start of improved refund handling
-                  // Calculate refunds for this specific product's line items in this order
-                  let refundAmount = 0;
-                  let hasRefunds = false;
+                  // Add to recent orders (limit to most recent 50)
+                  if (recentOrders.length < 50) {
+                    const lineItemsFormatted = lineItems.map(
+                      (item: ShopifyGraphQLLineItem) => {
+                        // Get the actual price per unit
+                        let pricePerUnit = "0.00";
+                        if (item.quantity > 0) {
+                          if (item.discountedTotalSet?.shopMoney?.amount) {
+                            pricePerUnit = (
+                              parseFloat(
+                                item.discountedTotalSet.shopMoney.amount
+                              ) / item.quantity
+                            ).toFixed(2);
+                          } else if (item.originalTotalSet?.shopMoney?.amount) {
+                            pricePerUnit = (
+                              parseFloat(
+                                item.originalTotalSet.shopMoney.amount
+                              ) / item.quantity
+                            ).toFixed(2);
+                          }
+                        }
 
-                  // Check if the order has refunds
-                  if (order.refunds && Array.isArray(order.refunds)) {
-                    order.refunds.forEach((refund: ShopifyGraphQLRefund) => {
-                      if (
-                        refund.refundLineItems &&
-                        refund.refundLineItems.edges
-                      ) {
-                        // Process each refund line item
-                        refund.refundLineItems.edges.forEach(
-                          (edge: { node: any }) => {
-                            const refundLineItem = edge.node;
+                        return {
+                          id: item.id,
+                          productId: productId,
+                          title: item.title,
+                          price: pricePerUnit,
+                          quantity: item.quantity,
+                          variantId: item.variant?.id,
+                          variantTitle: item.variant?.title,
+                        };
+                      }
+                    );
 
-                            // Check if this refund is for our specific product
-                            if (
-                              refundLineItem.lineItem &&
-                              refundLineItem.lineItem.product &&
-                              refundLineItem.lineItem.product.id
-                            ) {
-                              // Extract the numeric product ID from the GraphQL ID
-                              const refundProductId =
+                    // Start of improved refund handling
+                    // Calculate refunds for this specific product's line items in this order
+                    let refundAmount = 0;
+                    let hasRefunds = false;
+
+                    // Check if the order has refunds
+                    if (order.refunds && Array.isArray(order.refunds)) {
+                      order.refunds.forEach((refund: ShopifyGraphQLRefund) => {
+                        if (
+                          refund.refundLineItems &&
+                          refund.refundLineItems.edges
+                        ) {
+                          // Process each refund line item
+                          refund.refundLineItems.edges.forEach(
+                            (edge: { node: any }) => {
+                              const refundLineItem = edge.node;
+
+                              // Check if this refund is for our specific product
+                              if (
+                                refundLineItem.lineItem &&
+                                refundLineItem.lineItem.product &&
                                 refundLineItem.lineItem.product.id
-                                  .split("/")
-                                  .pop();
+                              ) {
+                                // Extract the numeric product ID from the GraphQL ID
+                                const refundProductId =
+                                  refundLineItem.lineItem.product.id
+                                    .split("/")
+                                    .pop();
 
-                              // Only count refunds for the current product we're processing
-                              if (refundProductId === productId) {
-                                console.log(
-                                  `Found refund for product ${productId} in order ${order.id}`
-                                );
-
-                                // Get the refunded amount from the subtotal
-                                if (
-                                  refundLineItem.subtotalSet &&
-                                  refundLineItem.subtotalSet.shopMoney &&
-                                  refundLineItem.subtotalSet.shopMoney.amount
-                                ) {
-                                  const refundedItemAmount = parseFloat(
-                                    refundLineItem.subtotalSet.shopMoney.amount
-                                  );
-                                  refundAmount += refundedItemAmount;
-                                  hasRefunds = true;
-
+                                // Only count refunds for the current product we're processing
+                                if (refundProductId === productId) {
                                   console.log(
-                                    `Refund amount for item: ${refundedItemAmount}, total refunds so far: ${refundAmount}`
+                                    `Found refund for product ${productId} in order ${order.id}`
                                   );
+
+                                  // Get the refunded amount from the subtotal
+                                  if (
+                                    refundLineItem.subtotalSet &&
+                                    refundLineItem.subtotalSet.shopMoney &&
+                                    refundLineItem.subtotalSet.shopMoney.amount
+                                  ) {
+                                    const refundedItemAmount = parseFloat(
+                                      refundLineItem.subtotalSet.shopMoney
+                                        .amount
+                                    );
+                                    refundAmount += refundedItemAmount;
+                                    hasRefunds = true;
+
+                                    console.log(
+                                      `Refund amount for item: ${refundedItemAmount}, total refunds so far: ${refundAmount}`
+                                    );
+                                  }
                                 }
                               }
                             }
-                          }
-                        );
-                      }
+                          );
+                        }
+                      });
+                    }
+
+                    // If we don't have specific line item refunds but the order is marked as refunded,
+                    // fall back to the old approach for backward compatibility
+                    if (
+                      order.displayFinancialStatus &&
+                      order.displayFinancialStatus
+                        .toUpperCase()
+                        .includes("REFUNDED")
+                    ) {
+                      // For any refunded order (partial or full), use the FULL order amount as refund
+                      // This ensures refund === sale amount
+                      refundAmount = orderRevenue;
+                      hasRefunds = true;
+                      console.log(
+                        `Order ${order.id} has REFUNDED status, setting FULL refund: ${refundAmount}`
+                      );
+                    }
+
+                    // Calculate net revenue (handle safely)
+                    const netRevenue = Math.max(0, orderRevenue - refundAmount);
+                    console.log(
+                      `Order ${order.id} - Revenue: ${orderRevenue.toFixed(
+                        2
+                      )}, Refund: ${refundAmount.toFixed(
+                        2
+                      )}, Net: ${netRevenue.toFixed(2)}`
+                    );
+                    // End of improved refund handling
+
+                    // Add enhanced order data
+                    recentOrders.push({
+                      id: order.id,
+                      orderNumber: order.name,
+                      createdAt: order.createdAt,
+                      totalAmount: orderRevenue.toString(),
+                      lineItems: lineItemsFormatted,
+                      // Add additional order data
+                      customerName:
+                        order.customer?.displayName || "Unknown Customer",
+                      customerEmail: order.customer?.email,
+                      financialStatus: order.displayFinancialStatus,
+                      fulfillmentStatus: order.displayFinancialStatus?.includes(
+                        "FULFILLED"
+                      )
+                        ? "fulfilled"
+                        : "unfulfilled",
+                      // Use the precisely calculated refund amount for this product
+                      refundAmount: refundAmount,
+                      // Extract shipping amount if available
+                      shippingAmount: parseFloat(
+                        order.totalShippingPriceSet?.shopMoney?.amount || "0"
+                      ),
+                      // Use calculated net revenue
+                      netRevenue: netRevenue,
                     });
                   }
-
-                  // If we don't have specific line item refunds but the order is marked as refunded,
-                  // fall back to the old approach for backward compatibility
-                  if (
-                    order.displayFinancialStatus &&
-                    order.displayFinancialStatus
-                      .toUpperCase()
-                      .includes("REFUNDED")
-                  ) {
-                    // For any refunded order (partial or full), use the FULL order amount as refund
-                    // This ensures refund === sale amount
-                    refundAmount = orderRevenue;
-                    hasRefunds = true;
-                    console.log(
-                      `Order ${order.id} has REFUNDED status, setting FULL refund: ${refundAmount}`
-                    );
-                  }
-
-                  // Calculate net revenue (handle safely)
-                  const netRevenue = Math.max(0, orderRevenue - refundAmount);
+                } else {
                   console.log(
-                    `Order ${order.id} - Revenue: ${orderRevenue.toFixed(
-                      2
-                    )}, Refund: ${refundAmount.toFixed(
-                      2
-                    )}, Net: ${netRevenue.toFixed(2)}`
+                    `Skipping order ${order.id} with status ${order.displayFinancialStatus}`
                   );
-                  // End of improved refund handling
-
-                  // Add enhanced order data
-                  recentOrders.push({
-                    id: order.id,
-                    orderNumber: order.name,
-                    createdAt: order.createdAt,
-                    totalAmount: orderRevenue.toString(),
-                    lineItems: lineItemsFormatted,
-                    // Add additional order data
-                    customerName:
-                      order.customer?.displayName || "Unknown Customer",
-                    customerEmail: order.customer?.email,
-                    financialStatus: order.displayFinancialStatus,
-                    fulfillmentStatus: order.displayFinancialStatus?.includes(
-                      "FULFILLED"
-                    )
-                      ? "fulfilled"
-                      : "unfulfilled",
-                    // Use the precisely calculated refund amount for this product
-                    refundAmount: refundAmount,
-                    // Extract shipping amount if available
-                    shippingAmount: parseFloat(
-                      order.totalShippingPriceSet?.shopMoney?.amount || "0"
-                    ),
-                    // Use calculated net revenue
-                    netRevenue: netRevenue,
-                  });
                 }
-              } else {
-                console.log(
-                  `Skipping order ${order.id} with status ${order.displayFinancialStatus}`
-                );
               }
             }
-          }
-        );
-
-        // Update pagination for next page
-        hasNextPage = orderData.pageInfo.hasNextPage;
-        cursor = orderData.pageInfo.endCursor;
-
-        // If we're on a 6-month query and have processed 5+ pages, consider stopping
-        // to avoid excessive API calls
-        if (is6MonthQuery && pageCount >= 5) {
-          console.log(
-            `Processed ${pageCount} pages for 6-month query, stopping pagination to avoid excessive API calls`
           );
-          hasNextPage = false;
+
+          // Update pagination for next page
+          hasNextPage = orderData.pageInfo.hasNextPage;
+          cursor = orderData.pageInfo.endCursor;
+
+          // If we're on a 6-month query and have processed 5+ pages, consider stopping
+          // to avoid excessive API calls
+          if (is6MonthQuery && pageCount >= 5) {
+            console.log(
+              `Processed ${pageCount} pages for 6-month query, stopping pagination to avoid excessive API calls`
+            );
+            hasNextPage = false;
+          }
+        } else {
+          console.error("Invalid GraphQL response structure");
+          break;
         }
       } catch (error) {
         console.error(
@@ -976,86 +993,478 @@ export async function GET(req: Request) {
 
     console.log(`Found ${approvedPosters.length} approved posters for user`);
 
-    // Fetch Shopify data for each approved poster with retry logic
-    const shopifyProductsPromises = approvedPosters.map(
-      async (poster: ApprovedPoster) => {
-        if (!poster.shopify_product_id) return null;
+    // Extract all Shopify product IDs for this creator
+    const shopifyProductIds = approvedPosters
+      .map((poster: ApprovedPoster) => poster.shopify_product_id)
+      .filter(Boolean) as string[];
 
-        console.log(
-          `Fetching Shopify data for product: ${poster.shopify_product_id}`
-        );
-
-        try {
-          const shopifyData = await retryWithBackoff(() =>
-            fetchShopifyProductData(
-              poster.shopify_product_id as string, // Add type assertion here
-              startDate,
-              endDate
-            )
-          );
-
-          if (!shopifyData) return null;
-
-          // Get image URL from Shopify product data
-          let imageUrl = "";
-          if (
-            shopifyData.product.images &&
-            Array.isArray(shopifyData.product.images) &&
-            shopifyData.product.images.length > 0
-          ) {
-            imageUrl = shopifyData.product.images[0].src;
-          }
-
-          // Combine poster and Shopify data
-          return {
-            id: poster.id,
-            title: poster.title || shopifyData.product.title || "Untitled",
-            imageUrl: imageUrl,
-            status: poster.status || "pending",
-            shopifyUrl: `${process.env.SHOPIFY_SHOP_DOMAIN}/products/${shopifyData.product.handle}`,
-            shopifyProductId: poster.shopify_product_id,
-            createdAt: poster.upload_date || new Date().toISOString(),
-            salesCount: shopifyData.salesCount,
-            revenue: shopifyData.revenue,
-            commission: shopifyData.commission,
-            recentOrders: shopifyData.recentOrders,
-          };
-        } catch (error) {
-          console.error(
-            `Error fetching data for product ${poster.shopify_product_id}:`,
-            error
-          );
-          // Return a basic object with available poster data but zero sales
-          return {
-            id: poster.id,
-            title: poster.title || "Untitled",
-            imageUrl: poster.poster_url || "",
-            status: poster.status || "pending",
-            shopifyUrl: poster.shopify_product_id
-              ? `${process.env.SHOPIFY_SHOP_DOMAIN}/products/${poster.shopify_product_id}`
-              : "",
-            shopifyProductId: poster.shopify_product_id,
-            createdAt: poster.upload_date || new Date().toISOString(),
-            salesCount: 0,
-            revenue: 0,
-            commission: 0,
-            recentOrders: [],
-          };
-        }
-      }
+    console.log(
+      `Creator has ${shopifyProductIds.length} Shopify products:`,
+      shopifyProductIds
     );
 
-    const shopifyProductsData = await Promise.all(shopifyProductsPromises);
-    const validShopifyData = shopifyProductsData.filter(Boolean);
+    // Add debugging for date range
+    console.log(`\n=== DATE RANGE DEBUGGING ===`);
+    console.log(
+      `Start date: ${startDate || "not specified (using 2000-01-01)"}`
+    );
+    console.log(`End date: ${endDate || "not specified (using today)"}`);
+    console.log(
+      `Date range query: ${startDate || "2000-01-01"} to ${
+        endDate || new Date().toISOString().split("T")[0]
+      }`
+    );
+    console.log(`=== END DATE RANGE DEBUGGING ===\n`);
 
-    // Detailed logging for products with revenue
-    validShopifyData.forEach((product: any) => {
-      if (product && product.revenue > 0) {
-        console.log(
-          `Revenue found for product ${product.shopifyProductId}: ${product.revenue}`
-        );
+    // Initialize product data map
+    const productDataMap = new Map<string, FormattedProduct>();
+
+    // First, get basic product information for each product
+    const accessToken = getShopifyAccessToken();
+    const restClient = await createAdminApiClient(accessToken);
+
+    // Add rate limiting helper
+    const delay = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
+
+    // Fetch basic product data for all products with rate limiting
+    for (let i = 0; i < approvedPosters.length; i++) {
+      const poster = approvedPosters[i];
+      if (!poster.shopify_product_id) continue;
+
+      // Add delay between requests to respect rate limits
+      if (i > 0) {
+        await delay(600); // 600ms delay = ~1.6 calls per second
       }
+
+      try {
+        const productData = await retryWithBackoff(
+          async () => {
+            return await safelyFetchProduct(
+              restClient,
+              poster.shopify_product_id
+            );
+          },
+          3,
+          1500
+        ); // 3 retries with 1.5 second initial delay
+
+        // Get image URL from Shopify product data
+        let imageUrl = "";
+        if (
+          productData.product.images &&
+          Array.isArray(productData.product.images) &&
+          productData.product.images.length > 0
+        ) {
+          imageUrl = productData.product.images[0].src;
+        }
+
+        // Initialize product data with zero sales/revenue (will be updated later)
+        productDataMap.set(poster.shopify_product_id, {
+          id: poster.id,
+          title: poster.title || productData.product.title || "Untitled",
+          imageUrl: imageUrl,
+          status: poster.status || "pending",
+          shopifyUrl: `${process.env.SHOPIFY_SHOP_DOMAIN}/products/${productData.product.handle}`,
+          shopifyProductId: poster.shopify_product_id,
+          createdAt: poster.upload_date || new Date().toISOString(),
+          salesCount: 0,
+          revenue: 0,
+          commission: 0,
+          recentOrders: [],
+        });
+      } catch (error) {
+        console.error(
+          `Error fetching basic data for product ${poster.shopify_product_id}:`,
+          error
+        );
+        // Add basic product data even if Shopify fetch fails
+        productDataMap.set(poster.shopify_product_id!, {
+          id: poster.id,
+          title: poster.title || "Untitled",
+          imageUrl: poster.poster_url || "",
+          status: poster.status || "pending",
+          shopifyUrl: poster.shopify_url || "",
+          shopifyProductId: poster.shopify_product_id!,
+          createdAt: poster.upload_date || new Date().toISOString(),
+          salesCount: 0,
+          revenue: 0,
+          commission: 0,
+          recentOrders: [],
+        });
+      }
+    }
+
+    // Now fetch ALL orders containing ANY of the creator's products (holistic approach)
+    const allOrders: ShopifyOrderData[] = [];
+
+    if (shopifyProductIds.length > 0) {
+      console.log("\n=== REST API ORDER FETCHING START ===");
+
+      // Fetch all orders containing any creator products using a simpler approach
+      let allOrdersFromAPI: ShopifyOrderData[] = [];
+
+      try {
+        // Use REST API instead of GraphQL to avoid pagination issues
+        const restClient = await createAdminApiClient(accessToken);
+
+        // Add rate limiting to avoid Shopify throttling
+        const delay = (ms: number) =>
+          new Promise((resolve) => setTimeout(resolve, ms));
+
+        // Fetch orders for each product individually to avoid complex GraphQL queries
+        for (let i = 0; i < shopifyProductIds.length; i++) {
+          const productId = shopifyProductIds[i];
+          console.log(
+            `Fetching orders for product ${productId} (${i + 1}/${
+              shopifyProductIds.length
+            })...`
+          );
+
+          // Add delay between requests to respect rate limits (2 calls per second max)
+          if (i > 0) {
+            console.log("Adding delay to respect Shopify rate limits...");
+            await delay(600); // 600ms delay = ~1.6 calls per second (safely under 2/sec limit)
+          }
+
+          try {
+            // Use REST API to get orders containing this product with retry logic
+            const ordersResponse = await retryWithBackoff(
+              async () => {
+                return await restClient.get({
+                  path: "orders",
+                  query: {
+                    status: "any",
+                    limit: 250, // Maximum allowed by Shopify REST API
+                    created_at_min: startDate || "2000-01-01",
+                    created_at_max:
+                      endDate || new Date().toISOString().split("T")[0],
+                    fields:
+                      "id,name,created_at,financial_status,total_price,customer,line_items,shipping_lines,refunds",
+                  },
+                });
+              },
+              5,
+              2000
+            ); // 5 retries with 2 second initial delay
+
+            if (
+              ordersResponse.body &&
+              typeof ordersResponse.body === "object" &&
+              "orders" in ordersResponse.body
+            ) {
+              const orders = (ordersResponse.body as any).orders;
+
+              // Check if we need to fetch more pages (REST API returns max 250 orders per page)
+              let allOrdersForProduct = [...orders];
+
+              // If we got 250 orders, there might be more pages
+              if (orders.length === 250) {
+                console.log(
+                  `Product ${productId} has 250+ orders, fetching additional pages...`
+                );
+
+                // Get the last order's created_at date for pagination
+                let lastOrderDate = orders[orders.length - 1]?.created_at;
+                let pageCount = 1;
+                const maxPages = 5; // Limit to prevent excessive API calls
+
+                while (lastOrderDate && pageCount < maxPages) {
+                  pageCount++;
+
+                  // Add delay between pagination requests
+                  await delay(800);
+
+                  try {
+                    const nextPageResponse = await retryWithBackoff(
+                      async () => {
+                        return await restClient.get({
+                          path: "orders",
+                          query: {
+                            status: "any",
+                            limit: 250,
+                            created_at_min: startDate || "2000-01-01",
+                            created_at_max: lastOrderDate, // Use last order date as max for next page
+                            fields:
+                              "id,name,created_at,financial_status,total_price,customer,line_items,shipping_lines,refunds",
+                          },
+                        });
+                      },
+                      3,
+                      1500
+                    );
+
+                    if (
+                      nextPageResponse.body &&
+                      typeof nextPageResponse.body === "object" &&
+                      "orders" in nextPageResponse.body
+                    ) {
+                      const nextPageOrders = (nextPageResponse.body as any)
+                        .orders;
+
+                      if (nextPageOrders.length === 0) {
+                        console.log(
+                          `No more orders found for product ${productId} on page ${pageCount}`
+                        );
+                        break;
+                      }
+
+                      // Filter out the last order from previous page to avoid duplicates
+                      const newOrders = nextPageOrders.filter(
+                        (order: any) => order.created_at !== lastOrderDate
+                      );
+                      allOrdersForProduct.push(...newOrders);
+
+                      console.log(
+                        `Fetched ${newOrders.length} additional orders for product ${productId} (page ${pageCount})`
+                      );
+
+                      // Update lastOrderDate for next iteration
+                      if (newOrders.length > 0) {
+                        lastOrderDate =
+                          newOrders[newOrders.length - 1]?.created_at;
+                      } else {
+                        break;
+                      }
+
+                      // If we got less than 250 orders, we've reached the end
+                      if (nextPageOrders.length < 250) {
+                        break;
+                      }
+                    } else {
+                      break;
+                    }
+                  } catch (paginationError) {
+                    console.error(
+                      `Error fetching page ${pageCount} for product ${productId}:`,
+                      paginationError
+                    );
+                    break;
+                  }
+                }
+
+                console.log(
+                  `Total orders fetched for product ${productId}: ${allOrdersForProduct.length}`
+                );
+              }
+
+              // Filter orders that contain this specific product
+              const relevantOrders = allOrdersForProduct.filter(
+                (order: any) => {
+                  const hasProduct =
+                    order.line_items &&
+                    order.line_items.some(
+                      (item: any) =>
+                        item.product_id &&
+                        item.product_id.toString() === productId
+                    );
+
+                  if (hasProduct) {
+                    console.log(
+                      `✅ Order ${order.name} contains product ${productId}`
+                    );
+                  }
+
+                  return hasProduct;
+                }
+              );
+
+              console.log(
+                `Found ${relevantOrders.length} relevant orders for product ${productId} out of ${allOrdersForProduct.length} total orders`
+              );
+
+              if (relevantOrders.length === 0) {
+                console.log(
+                  `⚠️  No orders found for product ${productId}. This might be why sales are showing as 0.`
+                );
+                console.log(
+                  `Sample of orders checked:`,
+                  allOrdersForProduct.slice(0, 3).map((o) => ({
+                    name: o.name,
+                    line_items: o.line_items?.map((item: any) => ({
+                      product_id: item.product_id,
+                      title: item.title,
+                    })),
+                  }))
+                );
+              }
+
+              // Convert to our format
+              relevantOrders.forEach((order: any) => {
+                // Filter line items for this specific product
+                const productLineItems = order.line_items.filter(
+                  (item: any) =>
+                    item.product_id && item.product_id.toString() === productId
+                );
+
+                if (productLineItems.length > 0) {
+                  // Calculate totals for this product's line items
+                  let itemTotal = 0;
+                  const lineItemsFormatted = productLineItems.map(
+                    (item: any) => {
+                      const itemPrice = parseFloat(item.price || "0");
+                      itemTotal += itemPrice * (item.quantity || 0);
+
+                      return {
+                        id: item.id?.toString() || "",
+                        productId: productId,
+                        title: item.title || "",
+                        price: itemPrice.toString(),
+                        quantity: item.quantity || 0,
+                      };
+                    }
+                  );
+
+                  // Calculate refunds for this product
+                  let refundAmount = 0;
+                  if (order.refunds && Array.isArray(order.refunds)) {
+                    order.refunds.forEach((refund: any) => {
+                      if (refund.refund_line_items) {
+                        refund.refund_line_items.forEach((refundItem: any) => {
+                          if (
+                            refundItem.line_item &&
+                            refundItem.line_item.product_id?.toString() ===
+                              productId
+                          ) {
+                            refundAmount += parseFloat(
+                              refundItem.subtotal || "0"
+                            );
+                          }
+                        });
+                      }
+                    });
+                  }
+
+                  // Check if the order is marked as refunded OR partially_refunded and handle as full refunds
+                  const financialStatus =
+                    order.financial_status?.toLowerCase() || "";
+                  if (
+                    financialStatus === "refunded" ||
+                    financialStatus === "partially_refunded"
+                  ) {
+                    // For fully refunded OR partially refunded orders, use the full item total as refund amount
+                    refundAmount = itemTotal;
+                    console.log(
+                      `Order ${order.name} is ${financialStatus}, setting refund amount to full item total: ${refundAmount}`
+                    );
+                  }
+
+                  // Calculate shipping proportionally
+                  const orderTotal = parseFloat(order.total_price || "0");
+                  const proportion =
+                    orderTotal > 0 ? itemTotal / orderTotal : 0;
+                  const shippingAmount = order.shipping_lines
+                    ? order.shipping_lines.reduce(
+                        (sum: number, shipping: any) =>
+                          sum + parseFloat(shipping.price || "0"),
+                        0
+                      ) * proportion
+                    : 0;
+
+                  // Calculate net revenue correctly
+                  const netRevenue = Math.max(0, itemTotal - refundAmount);
+
+                  console.log(
+                    `Order ${order.name}: itemTotal=${itemTotal}, refundAmount=${refundAmount}, netRevenue=${netRevenue}, financialStatus=${order.financial_status}`
+                  );
+
+                  // Add to our orders array
+                  const orderData: ShopifyOrderData = {
+                    id: order.id?.toString() || "",
+                    orderNumber: order.name || "",
+                    createdAt: order.created_at || "",
+                    totalAmount: itemTotal.toString(),
+                    lineItems: lineItemsFormatted,
+                    customerName:
+                      order.customer?.first_name && order.customer?.last_name
+                        ? `${order.customer.first_name} ${order.customer.last_name}`
+                        : "Unknown Customer",
+                    customerEmail: order.customer?.email || "",
+                    financialStatus: order.financial_status || "",
+                    refundAmount: refundAmount,
+                    shippingAmount: shippingAmount,
+                    netRevenue: netRevenue,
+                  };
+
+                  allOrdersFromAPI.push(orderData);
+
+                  // Update product data
+                  const productData = productDataMap.get(productId);
+                  if (productData) {
+                    const quantityToAdd = lineItemsFormatted.reduce(
+                      (sum: number, item: any) => sum + item.quantity,
+                      0
+                    );
+
+                    console.log(`📊 Updating product ${productId} data:`);
+                    console.log(
+                      `  - Adding ${quantityToAdd} to sales count (was ${productData.salesCount})`
+                    );
+                    console.log(
+                      `  - Adding £${netRevenue} to revenue (was £${productData.revenue})`
+                    );
+                    console.log(
+                      `  - Adding £${netRevenue * 0.3} to commission (was £${
+                        productData.commission
+                      })`
+                    );
+
+                    productData.salesCount += quantityToAdd;
+                    productData.revenue += netRevenue;
+                    productData.commission += netRevenue * 0.3;
+
+                    if (!productData.recentOrders) {
+                      productData.recentOrders = [];
+                    }
+                    productData.recentOrders.push(orderData);
+
+                    console.log(
+                      `  - New totals: ${productData.salesCount} sales, £${productData.revenue} revenue, £${productData.commission} commission`
+                    );
+                  } else {
+                    console.log(
+                      `❌ Product data not found in map for product ${productId}`
+                    );
+                  }
+                }
+              });
+            }
+          } catch (productError) {
+            console.error(
+              `Error fetching orders for product ${productId}:`,
+              productError
+            );
+            // Continue with next product after a longer delay
+            await delay(1000);
+          }
+        }
+
+        // Add all orders to the main array
+        allOrders.push(...allOrdersFromAPI);
+
+        console.log(`\n=== REST API ORDER FETCHING COMPLETE ===`);
+        console.log(`Total orders processed: ${allOrders.length}`);
+      } catch (error) {
+        console.error("Error in REST API order fetching:", error);
+        // Continue with empty orders array
+      }
+    }
+
+    // Convert product data map to array
+    const validShopifyData = Array.from(productDataMap.values());
+
+    console.log(`\n=== FINAL PRODUCT DATA SUMMARY ===`);
+    validShopifyData.forEach((product, index) => {
+      console.log(`Product ${index + 1}: ${product.title}`);
+      console.log(`  - ID: ${product.id}`);
+      console.log(`  - Shopify Product ID: ${product.shopifyProductId}`);
+      console.log(`  - Status: ${product.status}`);
+      console.log(`  - Sales Count: ${product.salesCount}`);
+      console.log(`  - Revenue: £${product.revenue}`);
+      console.log(`  - Commission: £${product.commission}`);
+      console.log(`  - Recent Orders: ${product.recentOrders?.length || 0}`);
     });
+    console.log(`=== END PRODUCT DATA SUMMARY ===\n`);
 
     // Get pending products
     const { data } = await supabase
@@ -1071,7 +1480,7 @@ export async function GET(req: Request) {
           id: poster.id,
           title: poster.title || "Untitled",
           variantTitle: "",
-          imageUrl: "", // Use empty string if no image available
+          imageUrl: "",
           price: "0.00",
           status: poster.status || "pending",
           salesCount: poster.sales || 0,
@@ -1086,22 +1495,8 @@ export async function GET(req: Request) {
     // Combine all products
     const formattedProducts = [...validShopifyData, ...nonApprovedProducts];
 
-    // Extract and deduplicate Shopify orders
-    const shopifyOrders: ShopifyOrderData[] = [];
-    validShopifyData.forEach((product: any) => {
-      if (product && "recentOrders" in product) {
-        const orders = product.recentOrders || [];
-        orders.forEach((order: ShopifyOrderData) => {
-          if (
-            !shopifyOrders.some(
-              (existingOrder) => existingOrder.id === order.id
-            )
-          ) {
-            shopifyOrders.push(order);
-          }
-        });
-      }
-    });
+    // Use the orders we collected during the holistic fetch
+    const shopifyOrders = allOrders;
 
     // Calculate sales statistics
     const calculateStats = (products: FormattedProduct[]): Stats => {
@@ -1120,28 +1515,41 @@ export async function GET(req: Request) {
 
       // For display and reporting purposes, calculate the total refund amount
       // But don't subtract this again from revenue
-      const totalRefunds = shopifyOrders
-        .filter((order) => {
-          return (
-            order.financialStatus?.toLowerCase() === "refunded" ||
-            (order.refundAmount && order.refundAmount > 0)
+      console.log(
+        `\n=== CALCULATING TOTAL REFUNDS FROM ${shopifyOrders.length} ORDERS ===`
+      );
+      const totalRefunds = shopifyOrders.reduce((sum, order) => {
+        // Check if this order has any refunds
+        const hasRefunds = order.refundAmount && order.refundAmount > 0;
+        const financialStatus = order.financialStatus?.toLowerCase() || "";
+        const isFullyRefunded = financialStatus === "refunded";
+        const isPartiallyRefunded = financialStatus === "partially_refunded";
+
+        console.log(
+          `Order ${order.orderNumber}: financialStatus="${order.financialStatus}", refundAmount=${order.refundAmount}, totalAmount=${order.totalAmount}`
+        );
+
+        if (isFullyRefunded || isPartiallyRefunded) {
+          // For fully refunded OR partially refunded orders, use the full order amount
+          const orderTotal = parseFloat(order.totalAmount || "0");
+          console.log(
+            `  ✅ Tracking FULL refund for ${financialStatus} order ${order.orderNumber}: £${orderTotal}`
           );
-        })
-        .reduce((sum, order) => {
-          if (order.financialStatus?.toLowerCase() === "refunded") {
-            const orderTotal = parseFloat(order.totalAmount || "0");
-            console.log(
-              `Tracking refund for order ${order.orderNumber}: £${orderTotal}`
-            );
-            return sum + orderTotal;
-          } else if (order.refundAmount && order.refundAmount > 0) {
-            console.log(
-              `Tracking partial refund for order ${order.orderNumber}: £${order.refundAmount}`
-            );
-            return sum + order.refundAmount;
-          }
-          return sum;
-        }, 0);
+          return sum + orderTotal;
+        } else if (hasRefunds && order.refundAmount) {
+          // For partial refunds on non-refunded orders
+          console.log(
+            `  ✅ Tracking PARTIAL refund for order ${order.orderNumber}: £${order.refundAmount}`
+          );
+          return sum + order.refundAmount;
+        } else {
+          console.log(`  ⏭️  No refunds for order ${order.orderNumber}`);
+        }
+
+        return sum;
+      }, 0);
+
+      console.log(`=== TOTAL REFUNDS CALCULATED: £${totalRefunds} ===\n`);
 
       // Since product.revenue is already net of refunds, we don't need to subtract refunds again
       const netRevenue = totalRevenue;

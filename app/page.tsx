@@ -78,6 +78,7 @@ export default function LandingPage() {
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
+      router.push("/");
       // No need to redirect, the auth state change will handle it
     } catch (error) {
       console.error("Error signing out:", error);

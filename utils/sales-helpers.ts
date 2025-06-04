@@ -84,6 +84,7 @@ export function calculateTotalRevenue<
 /**
  * Calculate total refund amount across all orders
  * For refunded orders, use the full order amount as the refund amount
+ * For orders with partial refunds, use the refundAmount field
  * @param orders Array of orders to calculate refunds from
  * @returns Total refund amount
  */
@@ -100,27 +101,37 @@ export function calculateTotalRefunds<
   if (!orders || !Array.isArray(orders)) return 0;
 
   orders.forEach((order) => {
-    // For refunded orders, use the full order amount as refund amount
+    // For refunded orders, use the refundAmount if available, otherwise use full order amount
     if (order.status === "Refunded") {
-      let orderAmount = 0;
+      // Check if we have a specific refund amount
+      if (
+        "refundAmount" in order &&
+        typeof order.refundAmount === "number" &&
+        order.refundAmount > 0
+      ) {
+        totalRefunds += order.refundAmount;
+      } else {
+        // Fall back to full order amount for refunded orders without specific refund amount
+        let orderAmount = 0;
 
-      if ("totalAmount" in order && order.totalAmount) {
-        // Handle ShopifyOrder format
-        orderAmount =
-          typeof order.totalAmount === "string"
-            ? parseFloat(order.totalAmount)
-            : order.totalAmount;
-      } else if ("total" in order && typeof order.total === "number") {
-        // Handle EnhancedOrder format
-        orderAmount = order.total;
+        if ("totalAmount" in order && order.totalAmount) {
+          // Handle ShopifyOrder format
+          orderAmount =
+            typeof order.totalAmount === "string"
+              ? parseFloat(order.totalAmount)
+              : order.totalAmount;
+        } else if ("total" in order && typeof order.total === "number") {
+          // Handle EnhancedOrder format
+          orderAmount = order.total;
+        }
+
+        totalRefunds += orderAmount;
       }
-
-      // Use full order amount for refunded orders
-      totalRefunds += orderAmount;
     } else if (
       order.status !== "Cancelled" &&
       "refundAmount" in order &&
-      typeof order.refundAmount === "number"
+      typeof order.refundAmount === "number" &&
+      order.refundAmount > 0
     ) {
       // For non-refunded and non-cancelled orders, add any partial refunds
       totalRefunds += order.refundAmount;

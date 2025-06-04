@@ -50,23 +50,47 @@ export function ProductsTable() {
   const { data, isLoading } = useDashboardData();
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 3;
+
+  // Debug logging
+  console.log("ProductsTable component data:", {
+    data,
+    isLoading,
+    hasProducts: !!data?.products,
+    productsCount: data?.products?.length,
+    products: data?.products,
+    stats: data?.stats,
+  });
 
   // Only show approved products and sort them in descending order (most recent first)
+  // Then take only the first 3 products
   const approvedProducts =
     data?.products
-      .filter((product) => product.status === "approved")
+      ?.filter((product) => {
+        console.log("Product filter check:", {
+          id: product.id,
+          title: product.title,
+          status: product.status,
+          salesCount: product.salesCount,
+          revenue: product.revenue,
+          commission: product.commission,
+        });
+        return product.status === "approved";
+      })
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ) || [];
+      )
+      .slice(0, 3) || []; // Take only the first 3 most recent products
 
-  const paginatedProducts = approvedProducts.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
+  console.log("Approved products processed:", {
+    count: approvedProducts.length,
+    products: approvedProducts,
+  });
 
-  const totalPages = Math.ceil(approvedProducts.length / pageSize);
+  // Since we're only showing 3 products, we don't need pagination
+  const paginatedProducts = approvedProducts;
+  const totalPages = 1; // Always 1 page since we're showing max 3 products
 
   const handlePrevious = () => {
     setPage((p) => Math.max(p - 1, 1));
@@ -80,15 +104,13 @@ export function ProductsTable() {
     <Card className="mx-4 lg:mx-6">
       <CardHeader>
         <CardTitle>Your Products</CardTitle>
-        <CardDescription>
-          View and manage your products in the shop
-        </CardDescription>
+        <CardDescription>Your 3 most recently added products</CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <div className="space-y-4">
             <Skeleton className="h-10 w-full" />
-            {Array.from({ length: 5 }).map((_, i) => (
+            {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-16 w-full" />
             ))}
           </div>
@@ -114,7 +136,7 @@ export function ProductsTable() {
                         colSpan={7}
                         className="h-24 text-center text-muted-foreground"
                       >
-                        No products found.
+                        No approved products found.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -152,13 +174,23 @@ export function ProductsTable() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {product.salesCount}
+                          {product.salesCount || 0}
                         </TableCell>
                         <TableCell className="text-right">
-                          £{product.revenue.toFixed(2)}
+                          £{(product.revenue || 0).toFixed(2)}
+                          {product.salesCount === 0 && (
+                            <span className="text-xs text-muted-foreground block">
+                              No sales yet
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
-                          £{product.commission.toFixed(2)}
+                          £{(product.commission || 0).toFixed(2)}
+                          {product.salesCount === 0 && (
+                            <span className="text-xs text-muted-foreground block">
+                              No commission yet
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {formatDistanceToNow(new Date(product.createdAt), {
@@ -193,29 +225,6 @@ export function ProductsTable() {
                 </TableBody>
               </Table>
             </div>
-            {approvedProducts.length > pageSize && (
-              <div className="flex items-center justify-end space-x-2 py-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePrevious}
-                  disabled={page === 1}
-                >
-                  Previous
-                </Button>
-                <div className="text-sm">
-                  Page {page} of {totalPages}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleNext}
-                  disabled={page === totalPages}
-                >
-                  Next
-                </Button>
-              </div>
-            )}
           </>
         )}
       </CardContent>

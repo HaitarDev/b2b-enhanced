@@ -212,6 +212,7 @@ export function useProductData(dateRange?: DateRange) {
               // Revenue data from Shopify
               revenue: shopifyData?.revenue || 0,
               commission: shopifyData?.commission || 0,
+              createdAt: poster.created_at,
               image:
                 shopifyData?.imageUrl ||
                 (poster.image_urls
